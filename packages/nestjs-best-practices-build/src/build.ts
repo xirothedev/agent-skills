@@ -131,11 +131,15 @@ async function build() {
     console.log(`Rules directory: ${RULES_DIR}`)
     console.log(`Output file: ${OUTPUT_FILE}`)
 
-    // Read all rule files (exclude files starting with _ and README.md)
+    // Read all rule files (exclude files starting with _, README.md, and CLAUDE.md)
     const files = await readdir(RULES_DIR)
     const ruleFiles = files
       .filter(
-        (f) => f.endsWith('.md') && !f.startsWith('_') && f !== 'README.md'
+        (f) =>
+          f.endsWith('.md') &&
+          !f.startsWith('_') &&
+          f !== 'README.md' &&
+          f !== 'CLAUDE.md'
       )
       .sort() // Sort filenames for consistent ordering across systems
 
@@ -244,7 +248,7 @@ async function build() {
           year: 'numeric',
         }),
         abstract:
-          'Performance optimization guide for React and Next.js applications, ordered by impact.',
+          'Performance optimization guide for NestJS applications, ordered by impact.',
       }
     }
 

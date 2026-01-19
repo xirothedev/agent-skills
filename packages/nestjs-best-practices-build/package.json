@@ -4,12 +4,12 @@
   "description": "Build tooling for NestJS Best Practices skill",
   "type": "module",
   "scripts": {
-    "build": "bun build-agents && bun extract-tests",
+    "build": "bun run build-agents && bun run extract-tests",
     "build-agents": "tsx src/build.ts",
     "validate": "tsx src/validate.ts",
     "extract-tests": "tsx src/extract-tests.ts",
     "migrate": "tsx src/migrate.ts",
-    "dev": "bun build && bun validate"
+    "dev": "bun run build && bun run validate"
   },
   "keywords": [
     "nestjs",

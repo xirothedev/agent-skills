@@ -14,7 +14,7 @@ import { RULES_DIR, TEST_CASES_FILE } from './config'
 function extractTestCases(rule: Rule): TestCase[] {
   const testCases: TestCase[] = []
   
-  rule.examples.forEach((example, index) => {
+  rule.examples.forEach((example) => {
     const isBad = example.label.toLowerCase().includes('incorrect') || 
                   example.label.toLowerCase().includes('wrong') ||
                   example.label.toLowerCase().includes('bad')
