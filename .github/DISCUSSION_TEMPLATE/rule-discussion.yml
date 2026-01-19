@@ -1,0 +1,43 @@
+---
+title: '[DISCUSSION] '
+labels: discussion
+---
+# Rule Discussion Template
+
+## Context
+
+<!-- Provide context for the discussion. What rule or topic are you discussing? -->
+
+## Questions or Points to Discuss
+
+<!-- List specific questions or points you'd like to discuss -->
+
+1.
+2.
+3.
+
+## Background Information
+
+<!-- Include any relevant background information, examples, or references -->
+
+### Example
+```typescript
+// Add code examples if relevant
+```
+
+### References
+- [Link to relevant documentation]()
+- [Link to related issue]()
+
+## Goal
+
+<!-- What outcome are you hoping for from this discussion? -->
+
+---
+
+### 💡 Tips for a good discussion
+
+- **Be specific**: Clearly describe what you want to discuss
+- **Provide context**: Include examples and references
+- **Stay focused**: Keep the discussion on topic
+- **Be respectful**: Listen to others' perspectives

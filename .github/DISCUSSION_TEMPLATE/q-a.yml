@@ -1,0 +1,38 @@
+---
+title: '[Q&A] '
+labels: question
+---
+# Q&A Discussion
+
+## Question
+
+<!-- Ask your question about NestJS best practices, this repository, or related topics -->
+
+## Context
+
+<!-- Provide context for your question -->
+
+- **What are you trying to achieve?**
+- **What have you already tried?**
+- **Where are you stuck?**
+
+## Code Example (if applicable)
+
+```typescript
+// Paste relevant code here
+```
+
+## Environment
+
+- **NestJS Version:**
+- **Node.js Version:**
+- **Relevant Packages:**
+
+---
+
+### 💡 Tips for getting a good answer
+
+- **Search first**: Check if your question has already been answered
+- **Be specific**: The more details you provide, the better the answer
+- **Show your work**: Share what you've already tried
+- **Use code blocks**: Format code properly for readability
