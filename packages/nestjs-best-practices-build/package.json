@@ -1,0 +1,27 @@
+{
+  "name": "nestjs-best-practices-build",
+  "version": "1.0.0",
+  "description": "Build tooling for NestJS Best Practices skill",
+  "type": "module",
+  "scripts": {
+    "build": "bun build-agents && bun extract-tests",
+    "build-agents": "tsx src/build.ts",
+    "validate": "tsx src/validate.ts",
+    "extract-tests": "tsx src/extract-tests.ts",
+    "migrate": "tsx src/migrate.ts",
+    "dev": "bun build && bun validate"
+  },
+  "keywords": [
+    "nestjs",
+    "performance",
+    "guidelines",
+    "llm",
+    "agents"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "1.3.6",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
