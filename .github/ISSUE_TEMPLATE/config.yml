@@ -1,11 +1,1 @@
-blank_issues_enabled: true
-contact_links:
-  - name: NestJS Documentation
-    url: https://docs.nestjs.com
-    about: Official NestJS documentation for reference
-  - name: NestJS Discord
-    url: https://discord.gg/nestjs
-    about: Join the NestJS community on Discord for questions
-  - name: Vercel NestJS Best Practices
-    url: https://github.com/vercel/nestjs-best-practices
-    about: Reference implementation of NestJS best practices
+blank_issues_enabled: false
