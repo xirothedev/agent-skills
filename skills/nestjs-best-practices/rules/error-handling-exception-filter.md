@@ -1,6 +1,7 @@
 ---
 title: Enable Global Exception Filter
 impact: CRITICAL
+section: 4
 impactDescription: Prevents stack trace leaks in production
 tags: security, error-handling, production, exceptions
 ---

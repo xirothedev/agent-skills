@@ -2,6 +2,7 @@
 title: Never Hardcode Secrets - Use Environment Variables
 impact: CRITICAL
 impactDescription: Prevents credential leaks in source control
+section: 9
 tags: security, config, environment, secrets
 ---
 
@@ -12,7 +13,7 @@ Hardcoded credentials in source code get committed to git and exposed publicly. 
 ### Installation
 
 ```bash
-bun install @nestjs/config
+bun add @nestjs/config
 ```
 
 ### Incorrect (credentials exposed):

@@ -2,6 +2,7 @@
 title: Use Helmet Middleware for Security Headers
 impact: CRITICAL
 impactDescription: Protects against XSS, clickjacking, and other web attacks
+section: 1
 tags: security, express, helmet, production
 ---
 

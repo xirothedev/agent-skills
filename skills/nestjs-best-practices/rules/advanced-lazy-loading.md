@@ -1,6 +1,7 @@
 ---
 title: Lazy Load Non-Critical Modules
 impact: HIGH
+section: 13
 impactDescription: Reduces startup time and memory usage
 tags: performance, modules, lazy-loading, optimization
 ---

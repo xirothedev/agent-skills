@@ -1,5 +1,6 @@
 ---
 title: Single Responsibility - Separate Controller and Service
+section: 3
 impact: HIGH
 impactDescription: Makes testing and maintenance easier
 tags: architecture, separation, testing, SRP

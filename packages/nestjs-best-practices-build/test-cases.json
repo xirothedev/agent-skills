@@ -1,19 +1,195 @@
 [
   {
     "ruleId": "",
-    "ruleTitle": "Validate All Inputs with DTOs and ValidationPipe",
+    "ruleTitle": "Generate Swagger/OpenAPI Documentation",
     "type": "bad",
-    "code": "// main.ts\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  await app.listen(3000);\n}\n\n// users.controller.ts\n@Post()\ncreate(@Body() createUserDto: any) {\n  // No validation - vulnerable to injection attacks!\n  return this.usersService.create(createUserDto);\n}",
+    "code": "// users.controller.ts - Clients must guess schema 🚨\n@Controller('users')\nexport class UsersController {\n  @Post()\n  create(@Body() data: any) {\n    return this.usersService.create(data);\n  }\n}",
     "language": "typescript",
-    "description": "no validation"
+    "description": "no documentation"
   },
   {
     "ruleId": "",
-    "ruleTitle": "Validate All Inputs with DTOs and ValidationPipe",
+    "ruleTitle": "Generate Swagger/OpenAPI Documentation",
     "type": "good",
-    "code": "{\n  \"statusCode\": 400,\n  \"message\": [\n    \"email must be an email\",\n    \"password must be longer than or equal to 8 characters\"\n  ],\n  \"error\": \"Bad Request\"\n}",
+    "code": "// main.ts\nimport { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';\n\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  \n  const config = new DocumentBuilder()\n    .setTitle('Users API')\n    .setDescription('User management endpoints')\n    .setVersion('1.0')\n    .addBearerAuth()\n    .build();\n    \n  const document = SwaggerModule.createDocument(app, config);\n  SwaggerModule.setup('api/docs', app, document);  // ✅ Interactive docs\n  \n  await app.listen(3000);\n}\n\n// users.controller.ts\n@ApiTags('users')\n@ApiBearerAuth()\n@Controller('users')\nexport class UsersController {\n  @Post()\n  @ApiOperation({ summary: 'Create new user' })\n  @ApiResponse({ status: 201, description: 'User created', type: UserDto })\n  @ApiResponse({ status: 400, description: 'Invalid input' })\n  create(@Body() createUserDto: CreateUserDto) {\n    return this.usersService.create(createUserDto);\n  }\n}",
+    "language": "typescript",
+    "description": "auto-generated docs"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Consistent Naming Conventions",
+    "type": "bad",
+    "code": "userController.ts      // camelCase file\nUserService.ts         // PascalCase file  \ngetuserById()          // mixed case method\nUserservice            // missing suffix",
+    "language": "typescript",
+    "description": "mixed conventions"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Consistent Naming Conventions",
+    "type": "good",
+    "code": "users.controller.ts    // kebab-case file\nusers.service.ts       // kebab-case file\nUsersController        // PascalCase class\nUsersService           // PascalCase class\nfindUserById()         // camelCase method ✅\ngetUserProfile()       // camelCase method ✅",
+    "language": "typescript",
+    "description": "NestJS conventions"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Remove Unused Code and Dependencies",
+    "type": "bad",
+    "code": "// package.json - Unused deps\n{\n  \"dependencies\": {\n    \"lodash\": \"^4.17.20\",     // Never imported\n    \"moment\": \"^2.29.4\",      // Replaced by date-fns\n    \"axios\": \"^1.0.0\"         // Switched to fetch\n  }\n}",
     "language": "json",
-    "description": "full validation"
+    "description": "code rot"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Remove Unused Code and Dependencies",
+    "type": "good",
+    "code": "// package.json - Clean ✅\n{\n  \"scripts\": {\n    \"cleanup\": \"bun pm prune && bun pm cache rm && bun run lint:fix\",\n    \"depcheck\": \"depcheck && ts-unused-exports tsconfig.json\"\n  }\n}",
+    "language": "json",
+    "description": "clean codebase"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Keep Functions Short and Single Purpose",
+    "type": "bad",
+    "code": "@Post()\nasync createUser(@Body() data: any) {\n  // 3 responsibilities mixed 🚨\n  const hashedPassword = await bcrypt.hash(data.password, 10);\n  const user = await this.prisma.user.create({ data: {...data, password: hashedPassword} });\n  const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);\n  await this.sendWelcomeEmail(user.email);\n  return { user, token };\n}",
+    "language": "typescript",
+    "description": "god function"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Keep Functions Short and Single Purpose",
+    "type": "good",
+    "code": "@Post()\nasync createUser(@Body() data: CreateUserDto) {\n  const hashedPassword = await this.hashPassword(data.password);\n  const user = await this.usersRepository.create({ ...data, password: hashedPassword });\n  const token = this.generateToken(user.id);\n  await this.emailService.sendWelcome(user.email);\n  return { user, token };  // ✅ Orchestration only\n}\n\nprivate async hashPassword(password: string) {\n  return bcrypt.hash(password, 10);\n}",
+    "language": "typescript",
+    "description": "single responsibility"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Parameterized Queries to Prevent SQL Injection",
+    "type": "bad",
+    "code": "// Raw SQL concatenation - DANGEROUS 🚨\nconst userId = req.params.id;\nconst query = `SELECT * FROM users WHERE name = '${userId}'`; \nawait prisma.$executeRaw(query);",
+    "language": "typescript",
+    "description": "SQL injection vulnerable"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Parameterized Queries to Prevent SQL Injection",
+    "type": "good",
+    "code": "// Prisma ORM - Safe ✅\nconst user = await prisma.user.findUnique({\n  where: { id: userId }\n});\n\n// Prisma raw with parameters\nconst users = await prisma.$queryRaw`\n  SELECT * FROM users \n  WHERE email = ${email} AND status = ${status}\n`;\n\n// Or with positional params\nconst results = await prisma.$queryRaw`\n  SELECT * FROM users WHERE id = $1\n`, userId;",
+    "language": "typescript",
+    "description": "Prisma safe queries"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Implement Health Check Endpoints",
+    "type": "bad",
+    "code": "// No health endpoint - can't detect failures 🚨",
+    "language": "typescript",
+    "description": "no monitoring"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Implement Health Check Endpoints",
+    "type": "good",
+    "code": "// health.controller.ts\n@Controller('health')\nexport class HealthController {\n  constructor(\n    @Inject(PrismaService) private prisma: PrismaService,\n    @Inject(CacheService) private cache: CacheService,\n  ) {}\n\n  @Get()\n  async checkHealth() {\n    // Database check\n    await this.prisma.$queryRaw`SELECT 1`;\n    \n    // Cache check\n    await this.cache.get('health-check');\n    \n    return {\n      status: 'healthy',\n      timestamp: new Date().toISOString(),\n      services: { database: 'ok', cache: 'ok' }\n    };\n  }\n}\n\n// main.ts\napp.setGlobalPrefix('api');\napp.use('/api/health', healthRouter);",
+    "language": "typescript",
+    "description": "comprehensive health checks"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Implement Proper Logging Strategy",
+    "type": "bad",
+    "code": "// users.service.ts - No structure 🚨\nconsole.log('Creating user:', data);\ntry {\n  const user = await this.prisma.user.create({ data });\n  console.log('User created:', user.id);\n} catch (error) {\n  console.error('User creation failed:', error);\n}",
+    "language": "typescript",
+    "description": "console.log debugging"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Implement Proper Logging Strategy",
+    "type": "good",
+    "code": "// logger.service.ts\nimport { LoggerService } from '@nestjs/common';\nimport * as winston from 'winston';\n\n@Injectable()\nexport class WinstonLogger implements LoggerService {\n  private logger = winston.createLogger({\n    level: 'info',\n    format: winston.format.combine(\n      winston.format.timestamp(),\n      winston.format.json()\n    ),\n    transports: [\n      new winston.transports.Console(),\n      new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),\n    ],\n  });\n}\n\n// users.service.ts\nimport { Logger } from '@nestjs/common';\n\n@Injectable()\nexport class UsersService {\n  private readonly logger = new Logger(UsersService.name);\n\n  async createUser(data: CreateUserDto) {\n    this.logger.log(`Creating user for email: ${data.email}`, 'UsersService');\n    \n    try {\n      const user = await this.prisma.user.create({ data });\n      this.logger.log(`User created successfully: ${user.id}`);\n      return user;\n    } catch (error) {\n      this.logger.error(`Failed to create user ${data.email}: ${error.message}`, error.stack);\n      throw error;\n    }\n  }\n}",
+    "language": "typescript",
+    "description": "structured logging"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Enable Compression Middleware for Responses",
+    "type": "bad",
+    "code": "// main.ts - Large responses 🚨\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  await app.listen(3000);\n}",
+    "language": "typescript",
+    "description": "no compression"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Enable Compression Middleware for Responses",
+    "type": "good",
+    "code": "// main.ts\nimport * as compression from 'compression';\n\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  app.use(compression());  // Gzip/brotli compression ✅\n  await app.listen(3000);\n}",
+    "language": "typescript",
+    "description": "compressed responses"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Implement Rate Limiting for All Routes",
+    "type": "bad",
+    "code": "// main.ts - Unlimited requests 🚨\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  await app.listen(3000);\n}",
+    "language": "typescript",
+    "description": "no protection"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Implement Rate Limiting for All Routes",
+    "type": "good",
+    "code": "// main.ts\nimport { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';\n\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  \n  app.useGlobalGuards(new ThrottlerGuard());\n  \n  await app.listen(3000);\n}\n\n// app.module.ts\n@Module({\n  imports: [\n    ThrottlerModule.forRoot([{\n      ttl: 60,        // 60 seconds\n      limit: 10,      // 10 requests per IP\n    }]),\n  ],\n})",
+    "language": "typescript",
+    "description": "rate limited"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Cache Frequently Used Data with Redis",
+    "type": "bad",
+    "code": "// users.service.ts - DB hit every time 🚨\nasync getUserProfile(id: string) {\n  return this.prisma.user.findUnique({\n    where: { id },\n    include: { posts: true, followers: true }\n  });\n}",
+    "language": "typescript",
+    "description": "database every request"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Cache Frequently Used Data with Redis",
+    "type": "good",
+    "code": "// cache.service.ts\n@Injectable()\nexport class CacheService {\n  constructor(private redis: Redis) {}\n  \n  async get<T>(key: string): Promise<T | null> {\n    const data = await this.redis.get(key);\n    return data ? JSON.parse(data) : null;\n  }\n  \n  async set(key: string, data: any, ttl = 300) {\n    await this.redis.setex(key, ttl, JSON.stringify(data));\n  }\n}\n\n// users.service.ts\nasync getUserProfile(id: string) {\n  const cacheKey = `user:${id}:profile`;\n  let profile = await this.cacheService.get(cacheKey);\n  \n  if (!profile) {\n    profile = await this.prisma.user.findUnique({\n      where: { id },\n      include: { posts: true, followers: true }\n    });\n    await this.cacheService.set(cacheKey, profile, 300);  // 5min ✅\n  }\n  \n  return profile;\n}",
+    "language": "typescript",
+    "description": "Redis cached"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Enable CORS with Whitelist Origins Only",
+    "type": "bad",
+    "code": "// main.ts\napp.enableCors();  // Uses '*' - dangerous! 🚨",
+    "language": "typescript",
+    "description": "vulnerable CORS"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Enable CORS with Whitelist Origins Only",
+    "type": "good",
+    "code": "// main.ts\napp.enableCors({\n  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['https://yourapp.com'],\n  credentials: true,\n  methods: ['GET', 'POST', 'PUT', 'DELETE'],\n  allowedHeaders: ['Content-Type', 'Authorization'],\n});",
+    "language": "typescript",
+    "description": "secure CORS"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Regular Dependency Security Audits",
+    "type": "bad",
+    "code": "// package.json - outdated packages 🚨\n{\n  \"dependencies\": {\n    \"lodash\": \"^4.17.20\",  // CVE-2021-23337\n    \"express\": \"^4.17.1\"    // Multiple CVEs\n  }\n}",
+    "language": "json",
+    "description": "vulnerable deps"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Regular Dependency Security Audits",
+    "type": "good",
+    "code": "# Pre-commit / CI checks\nbun run audit:check\nnpm audit --audit-level high\nbun pm audit           # Bun's audit check\nsnyk test --severity-threshold=high",
+    "language": "bash",
+    "description": "automated security"
   },
   {
     "ruleId": "",
@@ -38,5 +214,21 @@
     "code": "// main.ts\nimport helmet from '@fastify/helmet';\n\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n\n  // Fastify uses register() instead of use()\n  await app.register(helmet);\n\n  await app.listen(3000);\n}",
     "language": "typescript",
     "description": "Fastify"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Write Comprehensive Unit Tests",
+    "type": "bad",
+    "code": "// users.service.ts - No tests 🚨\n@Injectable()\nexport class UsersService {\n  async createUser(data: CreateUserDto) {\n    return this.prisma.user.create({ data });\n  }\n}",
+    "language": "typescript",
+    "description": "no tests"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Write Comprehensive Unit Tests",
+    "type": "good",
+    "code": "// users.service.spec.ts\ndescribe('UsersService', () => {\n  let service: UsersService;\n  let prisma: PrismaService;\n\n  beforeEach(async () => {\n    const module = await Test.createTestingModule({\n      providers: [UsersService, { provide: PrismaService, useValue: mockPrisma }],\n    }).compile();\n    service = module.get(UsersService);\n  });\n\n  it('should create user successfully', async () => {\n    const dto: CreateUserDto = { email: 'test@example.com', name: 'Test' };\n    const mockUser = { id: '1', ...dto };\n\n    jest.spyOn(prisma.user, 'create').mockResolvedValue(mockUser);\n\n    const result = await service.createUser(dto);\n    expect(result).toEqual(mockUser);\n    expect(prisma.user.create).toHaveBeenCalledWith(expect.any(Object));\n  });\n});",
+    "language": "typescript",
+    "description": "full test suite"
   }
 ]

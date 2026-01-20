@@ -1,6 +1,7 @@
 ---
 title: Organize Code by Feature Modules
 impact: HIGH
+section: 3
 impactDescription: Improves scalability and maintainability
 tags: architecture, modules, structure, scalability
 ---
