@@ -21,11 +21,12 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
 ## Table of Contents
 
 0. [Section 0](#0-section-0) — **CRITICAL**
-   - 0.1 [Never Hardcode Secrets - Use Environment Variables](#01-never-hardcode-secrets---use-environment-variables)
-   - 0.2 [Organize Code by Feature Modules](#02-organize-code-by-feature-modules)
-   - 0.3 [Single Responsibility - Separate Controller and Service](#03-single-responsibility---separate-controller-and-service)
-   - 0.4 [Use Helmet Middleware for Security Headers](#04-use-helmet-middleware-for-security-headers)
-   - 0.5 [Validate All Inputs with DTOs and ValidationPipe](#05-validate-all-inputs-with-dtos-and-validationpipe)
+   - 0.1 [Enable Global Exception Filter](#01-enable-global-exception-filter)
+   - 0.2 [Never Hardcode Secrets - Use Environment Variables](#02-never-hardcode-secrets---use-environment-variables)
+   - 0.3 [Organize Code by Feature Modules](#03-organize-code-by-feature-modules)
+   - 0.4 [Single Responsibility - Separate Controller and Service](#04-single-responsibility---separate-controller-and-service)
+   - 0.5 [Use Helmet Middleware for Security Headers](#05-use-helmet-middleware-for-security-headers)
+   - 0.6 [Validate All Inputs with DTOs and ValidationPipe](#06-validate-all-inputs-with-dtos-and-validationpipe)
 
 ---
 
@@ -33,7 +34,107 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
 
 **Impact: CRITICAL**
 
-### 0.1 Never Hardcode Secrets - Use Environment Variables
+### 0.1 Enable Global Exception Filter
+
+**Impact: CRITICAL (Prevents stack trace leaks in production)**
+
+Default Express errors leak stack traces and database info to clients. Global filters catch all exceptions and return safe HTTP responses. **Hide internal errors from users.**
+
+> **Hint**: Use global exception filters to standardize error responses, log errors properly, and prevent sensitive information leaks. Different responses for development vs production environments.
+
+**Without global filters:**
+
+```json
+// 🚨 Production response - LEAKS sensitive info!
+{
+  "statusCode": 500,
+  "message": "select * from users where id = $1 - relation \"users\" does not exist",
+  "stack": "Error: relation \"users\" does not exist\n    at Connection.parseE (/app/node_modules/pg/lib/connection.js:539:11)\n    at /app/src/users/users.service.ts:42:15\n    at processTicksAndRejections (internal/process/task_queues.js:95:5)"
+}
+```
+
+**With global filters:**
+
+```typescript
+// common/filters/all-exceptions.filter.ts
+import { LoggerService } from '../services/logger.service';
+
+@Catch()
+export class AllExceptionsFilter implements ExceptionFilter {
+  constructor(
+    private configService: ConfigService,
+    private loggerService: LoggerService,
+  ) {}
+
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse();
+    const request = ctx.getResponse();
+
+    const status =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    // ✅ Log to external service (Sentry, DataDog, etc.)
+    this.loggerService.logError({
+      status,
+      path: request.url,
+      method: request.method,
+      exception,
+      userId: request.user?.id,
+      correlationId: request.headers['x-correlation-id'],
+    });
+
+    const errorResponse = this.buildErrorResponse(exception, request);
+    response.status(status).json(errorResponse);
+  }
+}
+```
+
+Create domain-specific exceptions for better error handling:
+
+Handle HTTP exceptions specifically:
+
+Handle database-specific errors safely:
+
+Use multiple filters for different exception types:
+
+Better approach using dependency injection:
+
+Define a consistent error response structure:
+
+Integrate with external logging services:
+
+| Practice | Description |
+
+|----------|-------------|
+
+| Hide stack traces in production | Never expose internal implementation details |
+
+| Log everything | Always log errors server-side for debugging |
+
+| Use environment-aware responses | Show details in dev, hide in prod |
+
+| Create custom exceptions | Use domain-specific exceptions for business logic |
+
+| Standardize error format | Consistent response structure across all endpoints |
+
+| Handle database errors | Map DB errors to safe HTTP responses |
+
+| Use correlation IDs | Track requests through distributed systems |
+
+**Sources:**
+
+- [Exception Filters | NestJS - Official Documentation](https://docs.nestjs.com/exception-filters)
+
+- [Built-in HTTP exceptions | NestJS](https://docs.nestjs.com/exception-filters#built-in-http-exceptions)
+
+- [Exceptions | NestJS](https://docs.nestjs.com/throw-exceptions)
+
+- [Error Handling Best Practices | OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html)
+
+### 0.2 Never Hardcode Secrets - Use Environment Variables
 
 **Impact: CRITICAL (Prevents credential leaks in source control)**
 
@@ -55,7 +156,7 @@ Always provide a `.env.example` file to document required variables:
 
 - [NestJS Environment Configuration Using Zod | Medium](https://medium.com/@rotemdoar17/nestjs-environment-configuration-using-zod-92e3decca5ca)
 
-### 0.2 Organize Code by Feature Modules
+### 0.3 Organize Code by Feature Modules
 
 **Impact: HIGH (Improves scalability and maintainability)**
 
@@ -103,7 +204,7 @@ Test modules in isolation:
 
 - [EventEmitter2 | NestJS Recipe](https://docs.nestjs.com/techniques/events)
 
-### 0.3 Single Responsibility - Separate Controller and Service
+### 0.4 Single Responsibility - Separate Controller and Service
 
 **Impact: HIGH (Makes testing and maintenance easier)**
 
@@ -176,7 +277,7 @@ Controllers SHOULD handle HTTP-specific details:
 
 - [Clean Architecture | Robert C. Martin](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 
-### 0.4 Use Helmet Middleware for Security Headers
+### 0.5 Use Helmet Middleware for Security Headers
 
 **Impact: CRITICAL (Protects against XSS, clickjacking, and other web attacks)**
 
@@ -298,7 +399,7 @@ await app.register(helmet, {
 
 Reference: [https://docs.nestjs.com/security/helmet](https://docs.nestjs.com/security/helmet)
 
-### 0.5 Validate All Inputs with DTOs and ValidationPipe
+### 0.6 Validate All Inputs with DTOs and ValidationPipe
 
 **Impact: CRITICAL (Prevents invalid data and injection attacks)**
 
