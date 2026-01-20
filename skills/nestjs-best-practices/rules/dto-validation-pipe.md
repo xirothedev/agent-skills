@@ -16,10 +16,6 @@ Unvalidated inputs lead to runtime errors, SQL injection, and security vulnerabi
 Install required packages for validation:
 
 ```bash
-# npm
-npm i --save class-validator class-transformer
-
-# bun
 bun add class-validator class-transformer
 ```
 

@@ -21,8 +21,9 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
 ## Table of Contents
 
 0. [Section 0](#0-section-0) — **CRITICAL**
-   - 0.1 [Use Helmet Middleware for Security Headers](#01-use-helmet-middleware-for-security-headers)
-   - 0.2 [Validate All Inputs with DTOs and ValidationPipe](#02-validate-all-inputs-with-dtos-and-validationpipe)
+   - 0.1 [Never Hardcode Secrets - Use Environment Variables](#01-never-hardcode-secrets---use-environment-variables)
+   - 0.2 [Use Helmet Middleware for Security Headers](#02-use-helmet-middleware-for-security-headers)
+   - 0.3 [Validate All Inputs with DTOs and ValidationPipe](#03-validate-all-inputs-with-dtos-and-validationpipe)
 
 ---
 
@@ -30,7 +31,29 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
 
 **Impact: CRITICAL**
 
-### 0.1 Use Helmet Middleware for Security Headers
+### 0.1 Never Hardcode Secrets - Use Environment Variables
+
+**Impact: CRITICAL (Prevents credential leaks in source control)**
+
+Hardcoded credentials in source code get committed to git and exposed publicly. The `@nestjs/config` package provides a secure way to manage configuration through environment variables. **Secrets belong in environment only.**
+
+Use Joi or Zod to validate environment variables at startup:
+
+Use `registerAs` for type-safe, grouped configuration:
+
+Always provide a `.env.example` file to document required variables:
+
+**Sources:**
+
+- [Configuration | NestJS - Official Documentation](https://docs.nestjs.com/techniques/configuration)
+
+- [Managing Environment Variables in NestJS with ConfigModule | Medium](https://medium.com/@hashirmughal1000/managing-environment-variables-in-nestjs-with-configmodule-5b0742efb69c)
+
+- [Managing Configuration and Environment Variables in NestJS | dev.to](https://dev.to/vishnucprasad/managing-configuration-and-environment-variables-in-nestjs-28ni)
+
+- [NestJS Environment Configuration Using Zod | Medium](https://medium.com/@rotemdoar17/nestjs-environment-configuration-using-zod-92e3decca5ca)
+
+### 0.2 Use Helmet Middleware for Security Headers
 
 **Impact: CRITICAL (Protects against XSS, clickjacking, and other web attacks)**
 
@@ -41,16 +64,12 @@ NestJS with Express adapter exposes HTTP headers that can be exploited by attack
 **Express: default adapter**
 
 ```bash
-npm i --save helmet
-# or
 bun add helmet
 ```
 
 **Fastify adapter:**
 
 ```bash
-npm i --save @fastify/helmet
-# or
 bun add @fastify/helmet
 ```
 
@@ -156,7 +175,7 @@ await app.register(helmet, {
 
 Reference: [https://docs.nestjs.com/security/helmet](https://docs.nestjs.com/security/helmet)
 
-### 0.2 Validate All Inputs with DTOs and ValidationPipe
+### 0.3 Validate All Inputs with DTOs and ValidationPipe
 
 **Impact: CRITICAL (Prevents invalid data and injection attacks)**
 

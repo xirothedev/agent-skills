@@ -15,15 +15,11 @@ NestJS with Express adapter exposes HTTP headers that can be exploited by attack
 
 **Express (default adapter):**
 ```bash
-npm i --save helmet
-# or
 bun add helmet
 ```
 
 **Fastify adapter:**
 ```bash
-npm i --save @fastify/helmet
-# or
 bun add @fastify/helmet
 ```
 

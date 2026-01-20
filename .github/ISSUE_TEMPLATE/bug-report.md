@@ -29,7 +29,7 @@ assignees: ''
 - **OS:** <!-- e.g., Linux, macOS, Windows -->
 - **Node.js Version:** <!-- Run `node --version` -->
 - **Bun Version:** <!-- Run `bun --version` -->
-- **Package Manager:** <!-- bun, npm, pnpm, yarn -->
+- **Package Manager:** <!-- bun -->
 
 ### Logs / Screenshots
 
