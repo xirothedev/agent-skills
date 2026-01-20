@@ -23,8 +23,9 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
 0. [Section 0](#0-section-0) — **CRITICAL**
    - 0.1 [Never Hardcode Secrets - Use Environment Variables](#01-never-hardcode-secrets---use-environment-variables)
    - 0.2 [Organize Code by Feature Modules](#02-organize-code-by-feature-modules)
-   - 0.3 [Use Helmet Middleware for Security Headers](#03-use-helmet-middleware-for-security-headers)
-   - 0.4 [Validate All Inputs with DTOs and ValidationPipe](#04-validate-all-inputs-with-dtos-and-validationpipe)
+   - 0.3 [Single Responsibility - Separate Controller and Service](#03-single-responsibility---separate-controller-and-service)
+   - 0.4 [Use Helmet Middleware for Security Headers](#04-use-helmet-middleware-for-security-headers)
+   - 0.5 [Validate All Inputs with DTOs and ValidationPipe](#05-validate-all-inputs-with-dtos-and-validationpipe)
 
 ---
 
@@ -102,7 +103,80 @@ Test modules in isolation:
 
 - [EventEmitter2 | NestJS Recipe](https://docs.nestjs.com/techniques/events)
 
-### 0.3 Use Helmet Middleware for Security Headers
+### 0.3 Single Responsibility - Separate Controller and Service
+
+**Impact: HIGH (Makes testing and maintenance easier)**
+
+Fat controllers mix HTTP concerns with business logic, making unit testing impossible. Controllers should only parse HTTP requests and delegate. **Controllers are thin, services are smart.**
+
+> **Hint**: Controllers handle HTTP-specific concerns (validation, parsing, status codes). Services handle business logic (calculations, workflows, data transformations). This separation makes both layers independently testable.
+
+| Controllers (HTTP Layer) | Services (Business Layer) |
+
+|--------------------------|---------------------------|
+
+| Parse request bodies | Execute business logic |
+
+| Validate with DTOs | Perform calculations |
+
+| Return HTTP status codes | Transform data |
+
+| Handle routing | Manage transactions |
+
+| Set headers/cookies | Call external APIs |
+
+| Upload/download files | Enforce business rules |
+
+**Problems:**
+
+```typescript
+┌─────────────────────────────────────────────────────┐
+│                   Controller Layer                   │
+│  - Parse HTTP requests                               │
+│  - Validate with DTOs                                │
+│  - Set status codes and headers                      │
+│  - Delegate to services                              │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────┐
+│                    Service Layer                     │
+│  - Execute business logic                            │
+│  - Enforce business rules                            │
+│  - Coordinate multiple repositories                  │
+│  - Emit domain events                                │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────┐
+│                  Repository Layer                    │
+│  - Data access                                       │
+│  - Database queries                                  │
+│  - Entity persistence                                │
+└─────────────────────────────────────────────────────┘
+```
+
+- Cannot test business logic without HTTP context
+
+- Cannot reuse business logic in other contexts (CLI, GraphQL, WebSocket)
+
+- Difficult to mock dependencies for testing
+
+- Changes to business logic require HTTP layer changes
+
+Controllers SHOULD handle HTTP-specific details:
+
+**Sources:**
+
+- [Controllers | NestJS - Official Documentation](https://docs.nestjs.com/controllers)
+
+- [Providers | NestJS - Official Documentation](https://docs.nestjs.com/providers)
+
+- [Single Responsibility Principle | Wikipedia](https://en.wikipedia.org/wiki/Single-responsibility_principle)
+
+- [Clean Architecture | Robert C. Martin](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+
+### 0.4 Use Helmet Middleware for Security Headers
 
 **Impact: CRITICAL (Protects against XSS, clickjacking, and other web attacks)**
 
@@ -224,7 +298,7 @@ await app.register(helmet, {
 
 Reference: [https://docs.nestjs.com/security/helmet](https://docs.nestjs.com/security/helmet)
 
-### 0.4 Validate All Inputs with DTOs and ValidationPipe
+### 0.5 Validate All Inputs with DTOs and ValidationPipe
 
 **Impact: CRITICAL (Prevents invalid data and injection attacks)**
 
