@@ -25,8 +25,9 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
    - 0.2 [Never Hardcode Secrets - Use Environment Variables](#02-never-hardcode-secrets---use-environment-variables)
    - 0.3 [Organize Code by Feature Modules](#03-organize-code-by-feature-modules)
    - 0.4 [Single Responsibility - Separate Controller and Service](#04-single-responsibility---separate-controller-and-service)
-   - 0.5 [Use Helmet Middleware for Security Headers](#05-use-helmet-middleware-for-security-headers)
-   - 0.6 [Validate All Inputs with DTOs and ValidationPipe](#06-validate-all-inputs-with-dtos-and-validationpipe)
+   - 0.5 [Use Guards for Route Protection](#05-use-guards-for-route-protection)
+   - 0.6 [Use Helmet Middleware for Security Headers](#06-use-helmet-middleware-for-security-headers)
+   - 0.7 [Validate All Inputs with DTOs and ValidationPipe](#07-validate-all-inputs-with-dtos-and-validationpipe)
 
 ---
 
@@ -277,7 +278,59 @@ Controllers SHOULD handle HTTP-specific details:
 
 - [Clean Architecture | Robert C. Martin](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 
-### 0.5 Use Helmet Middleware for Security Headers
+### 0.5 Use Guards for Route Protection
+
+**Impact: CRITICAL (Enforces authentication/authorization per route)**
+
+Unprotected routes expose sensitive data. Guards run before controllers and can short-circuit requests. **Protect endpoints explicitly.**
+
+> **Hint**: Guards determine whether a request will be handled by the controller or not. Use them for authentication (who are you?) and authorization (what can you do?). Always use global guards with public route decorators for default-deny security.
+
+Guards execute **after** middleware but **before** interceptors and pipes:
+
+Best practice: Use global guards with explicit public decorators:
+
+Protect routes so users can only access their own resources:
+
+For service-to-service authentication:
+
+Prevent brute force and abuse:
+
+Combine multiple guards:
+
+Guards can be async for database checks:
+
+| Practice | Description |
+
+|----------|-------------|
+
+| Use global guards | Default-deny security with explicit public routes |
+
+| Separate auth from authorization | Use different guards for authentication and authorization |
+
+| Use decorators | Custom decorators improve code readability |
+
+| Combine guards | Chain multiple guards for comprehensive security |
+
+| Return boolean or throw | Guards can return `false` or throw exceptions |
+
+| Keep guards focused | Single responsibility per guard |
+
+| Consider performance | Cache user data to avoid repeated database queries |
+
+**Sources:**
+
+- [Guards | NestJS - Official Documentation](https://docs.nestjs.com/guards)
+
+- [Authentication | NestJS - Official Documentation](https://docs.nestjs.com/security/authentication)
+
+- [Authorization | NestJS - Official Documentation](https://docs.nestjs.com/security/authorization)
+
+- [Role-based Authentication | NestJS Guide](https://docs.nestjs.com/techniques/security)
+
+- [Throttler | NestJS Throttler Documentation](https://docs.nestjs.com/security/rate-limiting)
+
+### 0.6 Use Helmet Middleware for Security Headers
 
 **Impact: CRITICAL (Protects against XSS, clickjacking, and other web attacks)**
 
@@ -399,7 +452,7 @@ await app.register(helmet, {
 
 Reference: [https://docs.nestjs.com/security/helmet](https://docs.nestjs.com/security/helmet)
 
-### 0.6 Validate All Inputs with DTOs and ValidationPipe
+### 0.7 Validate All Inputs with DTOs and ValidationPipe
 
 **Impact: CRITICAL (Prevents invalid data and injection attacks)**
 
