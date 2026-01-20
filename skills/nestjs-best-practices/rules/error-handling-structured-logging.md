@@ -8,6 +8,8 @@ tags: logging, monitoring, debugging, production
 
 ## Implement Proper Logging Strategy
 
+> **Note:** For NestJS Logger with module context patterns, see `error-handling-logger-context.md`. This rule focuses on Winston and structured JSON logging for production environments.
+
 Console.log lacks structure, levels, and persistence. NestJS Logger with Winston provides structured JSON logs for production monitoring. **Log all errors, warnings, and business events.**
 
 **Incorrect (console.log debugging):**

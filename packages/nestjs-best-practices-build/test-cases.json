@@ -65,6 +65,22 @@
   },
   {
     "ruleId": "",
+    "ruleTitle": "Use Enum Classes for Type-Safe Values",
+    "type": "bad",
+    "code": "// tasks/tasks.service.ts - String literals 🚨\nimport { Injectable } from '@nestjs/common';\n\n@Injectable()\nexport class TasksService {\n  // ❌ String parameter - any value accepted\n  async updateStatus(id: string, status: string) {\n    const task = await this.repo.findOne(id);\n    task.status = status; // ❌ No type safety\n    return this.repo.save(task);\n  }\n\n  // ❌ Typo-prone comparisons\n  async getOpenTasks() {\n    // If you type 'opne' instead of 'open', no error!\n    return this.repo.find({ where: { status: 'opne' } });\n  }\n\n  // ❌ Magic strings throughout code\n  async completeTask(id: string) {\n    const task = await this.repo.findOne(id);\n    task.status = 'done'; // ❌ What if other code uses 'DONE'?\n    return this.repo.save(task);\n  }\n\n  // ❌ Inconsistent values\n  async createTask(title: string) {\n    // Is it 'open', 'Open', or 'OPEN'?\n    const task = this.repo.create({ title, status: 'OPEN' });\n    return this.repo.save(task);\n  }\n}\n\n// tasks/dto/create-task.dto.ts 🚨\nexport class CreateTaskDto {\n  title: string;\n\n  // ❌ No validation of allowed values\n  status?: string;\n}\n\n// tasks/task.entity.ts 🚨\nimport { Entity, Column } from 'typeorm';\n\n@Entity()\nexport class Task {\n  @Column({\n    type: 'varchar', // ❌ No enum type constraint\n  })\n  status: string; // ❌ Any string can be stored\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Enum Classes for Type-Safe Values"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Enum Classes for Type-Safe Values",
+    "type": "good",
+    "code": "// ✅ Alternative: String union types (for simple cases)\n// tasks/task-status.type.ts\nexport type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';\n\n// Still type-safe, but no enum object at runtime\nconst status: TaskStatus = 'OPEN'; // ✅ Valid\nconst invalid: TaskStatus = 'INVALID'; // ❌ Compile error\n\n// You can still get all values (requires manual array)\nexport const TASK_STATUSES: TaskStatus[] = ['OPEN', 'IN_PROGRESS', 'DONE'];",
+    "language": "typescript",
+    "description": "Correct example for Use Enum Classes for Type-Safe Values"
+  },
+  {
+    "ruleId": "",
     "ruleTitle": "Use Event-Driven Architecture for Loose Coupling",
     "type": "bad",
     "code": "// users.service.ts - Tight coupling 🚨\n@Injectable()\nexport class UsersService {\n  constructor(\n    private prisma: PrismaService,\n    private emailService: EmailService,      // ❌ Direct dependency\n    private notificationService: NotificationService,  // ❌ Direct dependency\n    private profileService: ProfileService,   // ❌ Direct dependency\n    private auditService: AuditService,       // ❌ Direct dependency\n    private analyticsService: AnalyticsService,  // ❌ Direct dependency\n  ) {}\n\n  async register(data: RegisterDto) {\n    const user = await this.prisma.user.create({ data });\n\n    // ❌ Five dependencies just for side effects!\n    await this.emailService.sendVerification(user.email);\n    await this.notificationService.sendPush(user.id, 'Welcome!');\n    await this.profileService.createDefault(user.id);\n    await this.auditService.log('USER_REGISTERED', { userId: user.id });\n    await this.analyticsService.track('user_registered', { userId: user.id });\n\n    // ❌ Hard to test - need to mock all 5 services\n    // ❌ Hard to maintain - adding new feature requires modifying UsersService\n    // ❌ Errors cascade - if email fails, everything fails\n    // ❌ Hard to scale - all side effects are synchronous\n  }\n\n  async deleteUser(userId: string) {\n    await this.prisma.user.delete({ where: { id: userId } });\n\n    // ❌ Direct calls everywhere\n    await this.notificationService.clearUserNotifications(userId);\n    await this.profileService.delete(userId);\n    await this.analyticsService.deleteUserData(userId);\n  }\n}",
@@ -161,6 +177,22 @@
   },
   {
     "ruleId": "",
+    "ruleTitle": "Use Custom Decorators for Type-Safe Request Data Access",
+    "type": "bad",
+    "code": "// tasks/tasks.controller.ts - Verbose and unsafe 🚨\nimport { Controller, Get, Req, Request } from '@nestjs/common';\nimport { TasksService } from './tasks.service';\n\n@Controller('tasks')\nexport class TasksController {\n  constructor(private tasksService: TasksService) {}\n\n  // ❌ Manual extraction with type assertion\n  @Get()\n  findAll(@Req() req: Request) {\n    const user = req.user as any; // ❌ Type assertion unsafe\n    return this.tasksService.getTasks(user.id);\n  }\n\n  // ❌ Verbose, repeated extraction logic\n  @Get(':id')\n  findOne(@Param('id') id: string, @Req() req: Request) {\n    const user = req.user as User; // ❌ Repeated in every method\n    return this.tasksService.findOne(id, user.id);\n  }\n\n  // ❌ Type assertion everywhere\n  @Post()\n  create(@Body() dto: CreateTaskDto, @Req() req: Request) {\n    const user = req.user as User;\n    return this.tasksService.create(dto, user.id);\n  }\n\n  // ❌ No autocomplete, no type safety\n  @Patch(':id')\n  update(\n    @Param('id') id: string,\n    @Body() dto: UpdateTaskDto,\n    @Req() req: Request,\n  ) {\n    const user = req.user as User;\n    // Does user.id exist? TypeScript doesn't know\n    return this.tasksService.update(id, dto, user.id);\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Custom Decorators for Type-Safe Request Data Access"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Custom Decorators for Type-Safe Request Data Access",
+    "type": "good",
+    "code": "// auth/decorators/get-user.decorator.spec.ts ✅\nimport { GetUser } from './get-user.decorator';\nimport { ExecutionContext } from '@nestjs/common';\n\ndescribe('GetUser Decorator', () => {\n  it('should extract user from request', () => {\n    const mockContext = {\n      switchToHttp: () => ({\n        getRequest: () => ({\n          user: { id: '123', email: 'test@example.com' },\n        }),\n      }),\n    } as unknown as ExecutionContext;\n\n    const result = GetUser(null, mockContext);\n\n    expect(result).toEqual({ id: '123', email: 'test@example.com' });\n  });\n\n  it('should extract specific property from user', () => {\n    const mockContext = {\n      switchToHttp: () => ({\n        getRequest: () => ({\n          user: { id: '123', email: 'test@example.com' },\n        }),\n      }),\n    } as unknown as ExecutionContext;\n\n    const result = GetUser('email', mockContext);\n\n    expect(result).toBe('test@example.com');\n  });\n});",
+    "language": "typescript",
+    "description": "Correct example for Use Custom Decorators for Type-Safe Request Data Access"
+  },
+  {
+    "ruleId": "",
     "ruleTitle": "Use Bun's Built-in Crypto for Secure Password Hashing",
     "type": "bad",
     "code": "// auth/auth.service.ts - Insecure 🚨\nimport { Injectable } from '@nestjs/common';\nimport { createHash, randomBytes } from 'crypto';\n\n@Injectable()\nexport class AuthService {\n  // ❌ Plain text storage\n  async register(email: string, password: string) {\n    return this.prisma.user.create({\n      data: { email, password },  // ❌ Stored as-is!\n    });\n  }\n\n  // ❌ Fast hash (SHA256, MD5) - crackable with GPUs\n  async hashPassword(password: string) {\n    return createHash('sha256').update(password).digest('hex');\n  }\n\n  // ❌ Manual salt - still vulnerable to GPU cracking\n  async hashWithSalt(password: string) {\n    const salt = randomBytes(16).toString('hex');\n    const hash = createHash('sha512')\n      .update(password + salt)\n      .digest('hex');\n    return `${salt}:${hash}`;\n  }\n\n  // ❌ Timing-sensitive string comparison\n  async verifyPassword(password: string, hash: string) {\n    const [salt, originalHash] = hash.split(':');\n    const computedHash = createHash('sha512')\n      .update(password + salt)\n      .digest('hex');\n    return computedHash === originalHash;  // ❌ Timing attack vulnerable\n  }\n\n  // ❌ Weak password requirements\n  @MinLength(6)  // ❌ Too short!\n  password: string;\n}",
@@ -225,6 +257,22 @@
   },
   {
     "ruleId": "",
+    "ruleTitle": "Use Custom Repository Pattern for Database Logic Encapsulation",
+    "type": "bad",
+    "code": "// tasks/tasks.service.ts - Database logic in service 🚨\nimport { Injectable } from '@nestjs/common';\nimport { InjectRepository } from '@nestjs/typeorm';\nimport { Repository } from 'typeorm';\nimport { Task } from './task.entity';\nimport { GetTasksFilterDto } from './dto/get-tasks-filter.dto';\nimport { User } from '../auth/entities/user.entity';\n\n@Injectable()\nexport class TasksService {\n  constructor(\n    @InjectRepository(Task) // ❌ Direct repository injection\n    private repo: Repository<Task>\n  ) {}\n\n  async getTasks(filterDto: GetTasksFilterDto, user: User) {\n    const { status, search } = filterDto;\n\n    // ❌ Database query logic in service\n    const query = this.repo.createQueryBuilder('task');\n    query.where({ user });\n\n    if (status) {\n      query.andWhere('task.status = :status', { status });\n    }\n\n    if (search) {\n      query.andWhere('(task.title LIKE :search OR task.description LIKE :search)', {\n        search: `%${search}%`,\n      });\n    }\n\n    return await query.getMany();\n  }\n\n  async findOne(id: string, user: User) {\n    // ❌ Repeated query logic\n    return this.repo.findOne({ where: { id, user } });\n  }\n\n  async create(dto: CreateTaskDto, user: User) {\n    // ❌ Mixed business and data logic\n    const task = this.repo.create({ ...dto, user });\n    return this.repo.save(task);\n  }\n\n  async findOverdue(user: User) {\n    // ❌ Complex query in service - hard to test\n    return this.repo\n      .createQueryBuilder('task')\n      .where('task.user = :user', { user })\n      .andWhere('task.dueDate < :now', { now: new Date() })\n      .andWhere('task.status != :status', { status: TaskStatus.DONE })\n      .getMany();\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Custom Repository Pattern for Database Logic Encapsulation"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Custom Repository Pattern for Database Logic Encapsulation",
+    "type": "good",
+    "code": "// For TypeORM >= 0.3, @EntityRepository() decorator is deprecated\n// Use dataSource-based approach:\n\n// tasks/repositories/tasks.repository.ts ✅\nimport { Injectable, NotFoundException } from '@nestjs/common';\nimport { InjectDataSource } from '@nestjs/typeorm';\nimport { DataSource, Repository } from 'typeorm';\nimport { Task } from '../entities/task.entity';\n\n@Injectable()\nexport class TasksRepository {\n  private get repo(): Repository<Task> {\n    return this.dataSource.getRepository(Task);\n  }\n\n  constructor(@InjectDataSource() private dataSource: DataSource) {}\n\n  async getTasks(user: User): Promise<Task[]> {\n    return this.repo.find({ where: { user } });\n  }\n\n  async findOne(id: string, user: User): Promise<Task> {\n    const task = await this.repo.findOne({ where: { id, user } });\n    if (!task) {\n      throw new NotFoundException();\n    }\n    return task;\n  }\n}\n\n// Or use the new TypeOrmEx decorator approach:\n// common/decorators/typeorm-ex.decorator.ts ✅\nimport { DataSource } from 'typeorm';\nimport { TYPEORM_EX_DATA_SOURCE } from './typeorm-ex.constants';\n\nexport const TypeormExRepository = <T>(entity: Type<any>) =>\n  InjectDataSource(TYPEORM_EX_DATA_SOURCE);\n\n// tasks/repositories/tasks.repository.ts\n@Injectable()\nexport class TasksRepository {\n  constructor(\n    @TypeormExRepository(Task)\n    private dataSource: DataSource,\n  ) {\n    // Use dataSource.getRepository(Task)\n  }\n}",
+    "language": "typescript",
+    "description": "Correct example for Use Custom Repository Pattern for Database Logic Encapsulation"
+  },
+  {
+    "ruleId": "",
     "ruleTitle": "Implement Health Check Endpoints",
     "type": "bad",
     "code": "// No health endpoint - can't detect failures 🚨",
@@ -257,6 +305,22 @@
   },
   {
     "ruleId": "",
+    "ruleTitle": "Use Logger with Module Context for Debugging",
+    "type": "bad",
+    "code": "// tasks/tasks.service.ts - Console logging 🚨\nimport { Injectable } from '@nestjs/common';\n\n@Injectable()\nexport class TasksService {\n  constructor(private tasksRepository: TasksRepository) {}\n\n  // ❌ Console.log - no context, no levels\n  async createTask(dto: CreateTaskDto, user: User) {\n    console.log('Creating task'); // ❌ No module context\n    const task = await this.tasksRepository.create(dto, user);\n    console.log('Task created:', task); // ❌ No structure\n    return task;\n  }\n\n  // ❌ Console.error for errors\n  async deleteTask(id: string) {\n    try {\n      return await this.tasksRepository.delete(id);\n    } catch (error) {\n      console.error('Error deleting task:', error); // ❌ No context\n      throw error;\n    }\n  }\n\n  // ❌ No logging at all\n  async updateTask(id: string, dto: UpdateTaskDto) {\n    return this.tasksRepository.update(id, dto); // ❌ Silent operation\n  }\n}\n\n// tasks/tasks.controller.ts - No logging 🚨\nimport { Controller, Get, Post, Body } from '@nestjs/common';\n\n@Controller('tasks')\nexport class TasksController {\n  @Get()\n  findAll(@Query() filterDto: GetTasksFilterDto) {\n    // ❌ No logging - hard to debug in production\n    return this.tasksService.findAll(filterDto);\n  }\n\n  @Post()\n  create(@Body() dto: CreateTaskDto) {\n    // ❌ No audit trail\n    return this.tasksService.create(dto);\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Logger with Module Context for Debugging"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Logger with Module Context for Debugging",
+    "type": "good",
+    "code": "// ✅ Add request ID to all logs in a request\n// common/middleware/request-id.middleware.ts\nimport { Injectable, NestMiddleware, Logger } from '@nestjs/common';\nimport { Request, Response, NextFunction } from 'express';\nimport { v4 as uuidv4 } from 'uuid';\n\n@Injectable()\nexport class RequestIdMiddleware implements NestMiddleware {\n  private logger = new Logger(RequestIdMiddleware.name);\n\n  use(req: Request, res: Response, next: NextFunction) {\n    const id = uuidv4();\n    req['id'] = id;\n\n    // ✅ Add request ID to response header\n    res.setHeader('X-Request-ID', id);\n\n    this.logger.verbose(`[${id}] ${req.method} ${req.url}`);\n\n    next();\n  }\n}\n\n// tasks/tasks.service.ts - Use request ID ✅\nimport { Injectable, Logger, Scope } from '@nestjs/common';\n\n@Injectable({ scope: Scope.REQUEST })\nexport class TasksService {\n  private readonly logger = new Logger(TasksService.name);\n\n  constructor(@Inject(REQUEST) private request: Request) {\n    // ✅ Use request ID in logs\n    const requestId = request['id'];\n    if (requestId) {\n      this.logger.setContext(`[${requestId}] ${TasksService.name}`);\n    }\n  }\n\n  findAll() {\n    this.logger.log('Retrieving all tasks');\n    // Output: [abc-123] [TasksService] Retrieving all tasks\n    return this.tasksRepository.findAll();\n  }\n}",
+    "language": "typescript",
+    "description": "Correct example for Use Logger with Module Context for Debugging"
+  },
+  {
+    "ruleId": "",
     "ruleTitle": "Implement Proper Logging Strategy",
     "type": "bad",
     "code": "// users.service.ts - No structure 🚨\nconsole.log('Creating user:', data);\ntry {\n  const user = await this.prisma.user.create({ data });\n  console.log('User created:', user.id);\n} catch (error) {\n  console.error('User creation failed:', error);\n}",
@@ -270,6 +334,22 @@
     "code": "// logger.service.ts\nimport { LoggerService } from '@nestjs/common';\nimport * as winston from 'winston';\n\n@Injectable()\nexport class WinstonLogger implements LoggerService {\n  private logger = winston.createLogger({\n    level: 'info',\n    format: winston.format.combine(\n      winston.format.timestamp(),\n      winston.format.json()\n    ),\n    transports: [\n      new winston.transports.Console(),\n      new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),\n    ],\n  });\n}\n\n// users.service.ts\nimport { Logger } from '@nestjs/common';\n\n@Injectable()\nexport class UsersService {\n  private readonly logger = new Logger(UsersService.name);\n\n  async createUser(data: CreateUserDto) {\n    this.logger.log(`Creating user for email: ${data.email}`, 'UsersService');\n    \n    try {\n      const user = await this.prisma.user.create({ data });\n      this.logger.log(`User created successfully: ${user.id}`);\n      return user;\n    } catch (error) {\n      this.logger.error(`Failed to create user ${data.email}: ${error.message}`, error.stack);\n      throw error;\n    }\n  }\n}",
     "language": "typescript",
     "description": "structured logging"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Response Transformation Interceptor for Serialization",
+    "type": "bad",
+    "code": "// users/users.controller.ts - Leaks sensitive data 🚨\nimport { Controller, Get, Param } from '@nestjs/common';\nimport { UsersService } from './users.service';\n\n@Controller('users')\nexport class UsersController {\n  constructor(private usersService: UsersService) {}\n\n  // ❌ Returns entity with password field\n  @Get(':id')\n  async findOne(@Param('id') id: string) {\n    const user = await this.usersService.findOne(id);\n    // Response includes: { id, email, name, password, internalNotes }\n    // Password is exposed!\n    return user;\n  }\n\n  // ❌ Returns raw repository data\n  @Get()\n  async findAll() {\n    // Returns all users with all fields\n    return this.usersService.findAll();\n  }\n\n  // ❌ Manual exclusion - verbose and error-prone\n  @Get('public/:id')\n  async findPublic(@Param('id') id: string) {\n    const user = await this.usersService.findOne(id);\n    // ❌ Must remember to exclude in every method\n    const { password, internalNotes, ...publicUser } = user;\n    return publicUser;\n  }\n}\n\n// users/entities/user.entity.ts - No exclusion decorators 🚨\nimport { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';\n\n@Entity('users')\nexport class User {\n  @PrimaryGeneratedColumn('uuid')\n  id: string;\n\n  @Column()\n  email: string;\n\n  @Column()\n  password: string;  // ❌ Will be included in all responses\n\n  @Column({ name: 'internal_notes' })\n  internalNotes: string;  // ❌ Leaked to clients\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Response Transformation Interceptor for Serialization"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Response Transformation Interceptor for Serialization",
+    "type": "good",
+    "code": "// ✅ Interceptor that handles arrays, pagination, etc.\nimport { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';\nimport { map, Observable } from 'rxjs';\nimport { instanceToPlain } from 'class-transformer';\n\n@Injectable()\nexport class TransformInterceptor implements NestInterceptor {\n  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {\n    return next.handle().pipe(\n      map((data) => {\n        // Handle Pagination\n        if (data?.data !== undefined && data?.meta !== undefined) {\n          return {\n            ...data,\n            data: instanceToPlain(data.data),\n          };\n        }\n\n        // Handle Arrays\n        if (Array.isArray(data)) {\n          return data.map((item) => instanceToPlain(item));\n        }\n\n        // Handle single objects\n        return instanceToPlain(data);\n      }),\n    );\n  }\n}",
+    "language": "typescript",
+    "description": "Correct example for Use Response Transformation Interceptor for Serialization"
   },
   {
     "ruleId": "",
@@ -422,5 +502,21 @@
     "code": "{\n  \"statusCode\": 400,\n  \"message\": [\n    \"email must be an email\",\n    \"password must be longer than or equal to 8 characters\",\n    \"password must contain uppercase, lowercase, and number\",\n    \"age must not be less than 18\"\n  ],\n  \"error\": \"Bad Request\"\n}",
     "language": "json",
     "description": "Correct example for Validate All Inputs with DTOs and ValidationPipe"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Filter DTOs for Query Parameter Validation",
+    "type": "bad",
+    "code": "// tasks/tasks.controller.ts - Individual parameters 🚨\nimport { Controller, Get, Query } from '@nestjs/common';\n\n@Controller('tasks')\nexport class TasksController {\n  @Get()\n  findAll(\n    @Query('status') status: string,        // ❌ No validation\n    @Query('search') search: string,        // ❌ No validation\n    @Query('page') page: string,            // ❌ String, not number\n    @Query('limit') limit: string,          // ❌ String, not number\n  ) {\n    // ❌ Manual type conversion\n    const pageNum = parseInt(page) || 1;\n    const limitNum = parseInt(limit) || 10;\n\n    // ❌ No type safety - status could be \"INVALID\"\n    return this.tasksService.getTasks(status, search, pageNum, limitNum);\n  }\n\n  @Get()\n  findAll(@Query() query: any) {\n    // ❌ No type safety at all\n    const status = query.status as string;\n    const page = parseInt(query.page) || 1;\n    const limit = parseInt(query.limit) || 10;\n    const search = query.search;\n\n    return this.tasksService.getTasks(status, search, page, limit);\n  }\n}\n\n// tasks/tasks.service.ts 🚨\n@Injectable()\nexport class TasksService {\n  // ❌ Too many parameters, no type safety\n  async getTasks(\n    status: string | undefined,\n    search: string | undefined,\n    page: number,\n    limit: number,\n  ) {\n    // ❌ What values are valid for status? No hints.\n    const query = this.repo.createQueryBuilder('task');\n\n    if (status) {\n      query.andWhere('task.status = :status', { status });\n    }\n\n    if (search) {\n      query.andWhere('(task.title LIKE :search OR task.description LIKE :search)', {\n        search: `%${search}%`,\n      });\n    }\n\n    query.skip((page - 1) * limit).take(limit);\n\n    return query.getMany();\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Filter DTOs for Query Parameter Validation"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Filter DTOs for Query Parameter Validation",
+    "type": "good",
+    "code": "// ✅ Different validation for different scenarios\n// tasks/dto/get-tasks-filter.dto.ts\nimport { ValidateIf } from 'class-validator';\n\nexport class GetTasksFilterDto {\n  @IsOptional()\n  @IsEnum(TaskStatus)\n  status?: TaskStatus;\n\n  // ✅ Only validate if search is present\n  @IsOptional()\n  @IsString()\n  @MinLength(3, { message: 'Search must be at least 3 characters' })\n  search?: string;\n\n  // ✅ Validate 'from' only if 'to' is also present\n  @IsOptional()\n  @ValidateIf((o) => o.to !== undefined)\n  @IsDate()\n  from?: Date;\n\n  @IsOptional()\n  @ValidateIf((o) => o.from !== undefined)\n  @IsDate()\n  to?: Date;\n}",
+    "language": "typescript",
+    "description": "Correct example for Use Filter DTOs for Query Parameter Validation"
   }
 ]

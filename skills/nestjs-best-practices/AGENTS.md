@@ -26,24 +26,29 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
    - 1.3 [Use Helmet Middleware for Security Headers](#13-use-helmet-middleware-for-security-headers)
 2. [Section 2](#2-section-2) — **HIGH**
    - 2.1 [Cache Frequently Used Data with Redis](#21-cache-frequently-used-data-with-redis)
-3. [Section 3](#3-section-3) — **HIGH**
+3. [Section 3](#3-section-3) — **MEDIUM**
    - 3.1 [Keep Functions Short and Single Purpose](#31-keep-functions-short-and-single-purpose)
    - 3.2 [Organize Code by Feature Modules](#32-organize-code-by-feature-modules)
    - 3.3 [Remove Unused Code and Dependencies](#33-remove-unused-code-and-dependencies)
    - 3.4 [Single Responsibility - Separate Controller and Service](#34-single-responsibility---separate-controller-and-service)
    - 3.5 [Use Consistent Naming Conventions](#35-use-consistent-naming-conventions)
-   - 3.6 [Use Event-Driven Architecture for Loose Coupling](#36-use-event-driven-architecture-for-loose-coupling)
+   - 3.6 [Use Enum Classes for Type-Safe Values](#36-use-enum-classes-for-type-safe-values)
+   - 3.7 [Use Event-Driven Architecture for Loose Coupling](#37-use-event-driven-architecture-for-loose-coupling)
 4. [Section 4](#4-section-4) — **CRITICAL**
    - 4.1 [Enable Global Exception Filter](#41-enable-global-exception-filter)
    - 4.2 [Implement Proper Logging Strategy](#42-implement-proper-logging-strategy)
+   - 4.3 [Use Logger with Module Context for Debugging](#43-use-logger-with-module-context-for-debugging)
 5. [Section 5](#5-section-5) — **MEDIUM**
    - 5.1 [Create Custom Pipes for Query Parameter Transformation](#51-create-custom-pipes-for-query-parameter-transformation)
-   - 5.2 [Validate All Inputs with DTOs and ValidationPipe](#52-validate-all-inputs-with-dtos-and-validationpipe)
+   - 5.2 [Use Filter DTOs for Query Parameter Validation](#52-use-filter-dtos-for-query-parameter-validation)
+   - 5.3 [Validate All Inputs with DTOs and ValidationPipe](#53-validate-all-inputs-with-dtos-and-validationpipe)
 6. [Section 6](#6-section-6) — **CRITICAL**
-   - 6.1 [Use Parameterized Queries to Prevent SQL Injection](#61-use-parameterized-queries-to-prevent-sql-injection)
-7. [Section 7](#7-section-7) — **CRITICAL**
+   - 6.1 [Use Custom Repository Pattern for Database Logic Encapsulation](#61-use-custom-repository-pattern-for-database-logic-encapsulation)
+   - 6.2 [Use Parameterized Queries to Prevent SQL Injection](#62-use-parameterized-queries-to-prevent-sql-injection)
+7. [Section 7](#7-section-7) — **HIGH**
    - 7.1 [Use Bun's Built-in Crypto for Secure Password Hashing](#71-use-buns-built-in-crypto-for-secure-password-hashing)
-   - 7.2 [Use Guards for Route Protection](#72-use-guards-for-route-protection)
+   - 7.2 [Use Custom Decorators for Type-Safe Request Data Access](#72-use-custom-decorators-for-type-safe-request-data-access)
+   - 7.3 [Use Guards for Route Protection](#73-use-guards-for-route-protection)
 8. [Section 8](#8-section-8) — **HIGH**
    - 8.1 [Generate Swagger/OpenAPI Documentation](#81-generate-swaggeropenapi-documentation)
    - 8.2 [Use Cursor-Based Pagination for Large Datasets](#82-use-cursor-based-pagination-for-large-datasets)
@@ -59,6 +64,8 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
 13. [Section 13](#13-section-13) — **HIGH**
    - 13.1 [Lazy Load Non-Critical Modules](#131-lazy-load-non-critical-modules)
    - 13.2 [Use @nestjs/schedule for Cron Jobs and Scheduled Tasks](#132-use-nestjsschedule-for-cron-jobs-and-scheduled-tasks)
+14. [Section 14](#14-section-14) — **MEDIUM**
+   - 14.1 [Use Response Transformation Interceptor for Serialization](#141-use-response-transformation-interceptor-for-serialization)
 
 ---
 
@@ -314,7 +321,7 @@ async getUserProfile(id: string) {
 
 ## 3. Section 3
 
-**Impact: HIGH**
+**Impact: MEDIUM**
 
 ### 3.1 Keep Functions Short and Single Purpose
 
@@ -628,7 +635,118 @@ findUserById()         // camelCase method ✅
 getUserProfile()       // camelCase method ✅
 ```
 
-### 3.6 Use Event-Driven Architecture for Loose Coupling
+### 3.6 Use Enum Classes for Type-Safe Values
+
+**Impact: MEDIUM (Prevents typos and improves autocomplete)**
+
+When implementing or reviewing constant values, **always** follow these steps:
+
+**Pattern to check:** Look for string literals assigned to variables, compared in conditionals, or used as status/type values.
+
+**If found:** Replace with enums.
+
+**File:** `tasks/task-status.enum.ts`
+
+**File:** `tasks/task.entity.ts`
+
+**File:** `tasks/dto/create-task.dto.ts`
+
+**Incorrect:**
+
+```typescript
+// tasks/tasks.service.ts - String literals 🚨
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class TasksService {
+  // ❌ String parameter - any value accepted
+  async updateStatus(id: string, status: string) {
+    const task = await this.repo.findOne(id);
+    task.status = status; // ❌ No type safety
+    return this.repo.save(task);
+  }
+
+  // ❌ Typo-prone comparisons
+  async getOpenTasks() {
+    // If you type 'opne' instead of 'open', no error!
+    return this.repo.find({ where: { status: 'opne' } });
+  }
+
+  // ❌ Magic strings throughout code
+  async completeTask(id: string) {
+    const task = await this.repo.findOne(id);
+    task.status = 'done'; // ❌ What if other code uses 'DONE'?
+    return this.repo.save(task);
+  }
+
+  // ❌ Inconsistent values
+  async createTask(title: string) {
+    // Is it 'open', 'Open', or 'OPEN'?
+    const task = this.repo.create({ title, status: 'OPEN' });
+    return this.repo.save(task);
+  }
+}
+
+// tasks/dto/create-task.dto.ts 🚨
+export class CreateTaskDto {
+  title: string;
+
+  // ❌ No validation of allowed values
+  status?: string;
+}
+
+// tasks/task.entity.ts 🚨
+import { Entity, Column } from 'typeorm';
+
+@Entity()
+export class Task {
+  @Column({
+    type: 'varchar', // ❌ No enum type constraint
+  })
+  status: string; // ❌ Any string can be stored
+}
+```
+
+**Correct:**
+
+```typescript
+// ✅ Alternative: String union types (for simple cases)
+// tasks/task-status.type.ts
+export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';
+
+// Still type-safe, but no enum object at runtime
+const status: TaskStatus = 'OPEN'; // ✅ Valid
+const invalid: TaskStatus = 'INVALID'; // ❌ Compile error
+
+// You can still get all values (requires manual array)
+export const TASK_STATUSES: TaskStatus[] = ['OPEN', 'IN_PROGRESS', 'DONE'];
+```
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use enums for constant values | Type-safe, autocomplete support |
+
+| Define enums in separate files | Reusable across the application |
+
+| Use enum type in entities | Database-level constraint |
+
+| Add @IsEnum() in DTOs | Validation for API inputs |
+
+| Use consistent casing | Avoids confusion (OPEN vs open vs Open) |
+
+| Create enum utilities | Helper functions for common operations |
+
+**Sources:**
+
+- [TypeScript Enums Documentation](https://www.typescriptlang.org/docs/handbook/enums.html)
+
+- [NestJS Validation with Enums](https://docs.nestjs.com/techniques/validation)
+
+- [arielweinberger/nestjs-recipe](https://github.com/arielweinberger/nestjs-recipe) - Production-ready NestJS application
+
+### 3.7 Use Event-Driven Architecture for Loose Coupling
 
 **Impact: HIGH (Reduces dependencies and enables scalability)**
 
@@ -927,6 +1045,8 @@ Integrate with external logging services:
 
 **Impact: HIGH (Enables debugging, monitoring, and audit trails)**
 
+> **Note:** For NestJS Logger with module context patterns, see `error-handling-logger-context.md`. This rule focuses on Winston and structured JSON logging for production environments.
+
 Console.log lacks structure, levels, and persistence. NestJS Logger with Winston provides structured JSON logs for production monitoring. **Log all errors, warnings, and business events.**
 
 **Incorrect: console.log debugging**
@@ -985,6 +1105,142 @@ export class UsersService {
   }
 }
 ```
+
+### 4.3 Use Logger with Module Context for Debugging
+
+**Impact: MEDIUM (Improves debugging with contextual log messages)**
+
+When implementing or reviewing logging, **always** follow these steps:
+
+**Pattern to check:** Look for `console.log()`, `console.error()`, or Logger without context parameter.
+
+**If found:** Replace with contextual Logger.
+
+**Incorrect:**
+
+```typescript
+// tasks/tasks.service.ts - Console logging 🚨
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class TasksService {
+  constructor(private tasksRepository: TasksRepository) {}
+
+  // ❌ Console.log - no context, no levels
+  async createTask(dto: CreateTaskDto, user: User) {
+    console.log('Creating task'); // ❌ No module context
+    const task = await this.tasksRepository.create(dto, user);
+    console.log('Task created:', task); // ❌ No structure
+    return task;
+  }
+
+  // ❌ Console.error for errors
+  async deleteTask(id: string) {
+    try {
+      return await this.tasksRepository.delete(id);
+    } catch (error) {
+      console.error('Error deleting task:', error); // ❌ No context
+      throw error;
+    }
+  }
+
+  // ❌ No logging at all
+  async updateTask(id: string, dto: UpdateTaskDto) {
+    return this.tasksRepository.update(id, dto); // ❌ Silent operation
+  }
+}
+
+// tasks/tasks.controller.ts - No logging 🚨
+import { Controller, Get, Post, Body } from '@nestjs/common';
+
+@Controller('tasks')
+export class TasksController {
+  @Get()
+  findAll(@Query() filterDto: GetTasksFilterDto) {
+    // ❌ No logging - hard to debug in production
+    return this.tasksService.findAll(filterDto);
+  }
+
+  @Post()
+  create(@Body() dto: CreateTaskDto) {
+    // ❌ No audit trail
+    return this.tasksService.create(dto);
+  }
+}
+```
+
+**Correct:**
+
+```typescript
+// ✅ Add request ID to all logs in a request
+// common/middleware/request-id.middleware.ts
+import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+
+@Injectable()
+export class RequestIdMiddleware implements NestMiddleware {
+  private logger = new Logger(RequestIdMiddleware.name);
+
+  use(req: Request, res: Response, next: NextFunction) {
+    const id = uuidv4();
+    req['id'] = id;
+
+    // ✅ Add request ID to response header
+    res.setHeader('X-Request-ID', id);
+
+    this.logger.verbose(`[${id}] ${req.method} ${req.url}`);
+
+    next();
+  }
+}
+
+// tasks/tasks.service.ts - Use request ID ✅
+import { Injectable, Logger, Scope } from '@nestjs/common';
+
+@Injectable({ scope: Scope.REQUEST })
+export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
+  constructor(@Inject(REQUEST) private request: Request) {
+    // ✅ Use request ID in logs
+    const requestId = request['id'];
+    if (requestId) {
+      this.logger.setContext(`[${requestId}] ${TasksService.name}`);
+    }
+  }
+
+  findAll() {
+    this.logger.log('Retrieving all tasks');
+    // Output: [abc-123] [TasksService] Retrieving all tasks
+    return this.tasksRepository.findAll();
+  }
+}
+```
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use `Logger(Class.name)` | Context prefix in every log message |
+
+| Log at appropriate levels | Control verbosity by environment |
+
+| Log important business events | Audit trail for debugging |
+
+| Log errors with stack traces | Easier debugging in production |
+
+| Use verbose for debugging | Disabled by default, enabled when needed |
+
+| Log user actions | Security audit trail |
+
+**Sources:**
+
+- [NestJS Logger Documentation](https://docs.nestjs.com/techniques/logger)
+
+- [arielweinberger/nestjs-recipe](https://github.com/arielweinberger/nestjs-recipe) - Production-ready NestJS application
+
+**See also:** `error-handling-structured-logging.md` for Winston/structured logging in production.
 
 ---
 
@@ -1130,7 +1386,141 @@ describe('ParseIntPipe', () => {
 
 - [Query String Params | MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams)
 
-### 5.2 Validate All Inputs with DTOs and ValidationPipe
+### 5.2 Use Filter DTOs for Query Parameter Validation
+
+**Impact: HIGH (Validates and type-checks query parameters)**
+
+When implementing or reviewing query parameter handling, **always** follow these steps:
+
+**Pattern to check:** Look for `@Query()` decorators with parameter names, manual string parsing, or optional chaining.
+
+**If found:** Replace with filter DTO.
+
+**File:** `tasks/dto/get-tasks-filter.dto.ts`
+
+**Incorrect:**
+
+```typescript
+// tasks/tasks.controller.ts - Individual parameters 🚨
+import { Controller, Get, Query } from '@nestjs/common';
+
+@Controller('tasks')
+export class TasksController {
+  @Get()
+  findAll(
+    @Query('status') status: string,        // ❌ No validation
+    @Query('search') search: string,        // ❌ No validation
+    @Query('page') page: string,            // ❌ String, not number
+    @Query('limit') limit: string,          // ❌ String, not number
+  ) {
+    // ❌ Manual type conversion
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+
+    // ❌ No type safety - status could be "INVALID"
+    return this.tasksService.getTasks(status, search, pageNum, limitNum);
+  }
+
+  @Get()
+  findAll(@Query() query: any) {
+    // ❌ No type safety at all
+    const status = query.status as string;
+    const page = parseInt(query.page) || 1;
+    const limit = parseInt(query.limit) || 10;
+    const search = query.search;
+
+    return this.tasksService.getTasks(status, search, page, limit);
+  }
+}
+
+// tasks/tasks.service.ts 🚨
+@Injectable()
+export class TasksService {
+  // ❌ Too many parameters, no type safety
+  async getTasks(
+    status: string | undefined,
+    search: string | undefined,
+    page: number,
+    limit: number,
+  ) {
+    // ❌ What values are valid for status? No hints.
+    const query = this.repo.createQueryBuilder('task');
+
+    if (status) {
+      query.andWhere('task.status = :status', { status });
+    }
+
+    if (search) {
+      query.andWhere('(task.title LIKE :search OR task.description LIKE :search)', {
+        search: `%${search}%`,
+      });
+    }
+
+    query.skip((page - 1) * limit).take(limit);
+
+    return query.getMany();
+  }
+}
+```
+
+**Correct:**
+
+```typescript
+// ✅ Different validation for different scenarios
+// tasks/dto/get-tasks-filter.dto.ts
+import { ValidateIf } from 'class-validator';
+
+export class GetTasksFilterDto {
+  @IsOptional()
+  @IsEnum(TaskStatus)
+  status?: TaskStatus;
+
+  // ✅ Only validate if search is present
+  @IsOptional()
+  @IsString()
+  @MinLength(3, { message: 'Search must be at least 3 characters' })
+  search?: string;
+
+  // ✅ Validate 'from' only if 'to' is also present
+  @IsOptional()
+  @ValidateIf((o) => o.to !== undefined)
+  @IsDate()
+  from?: Date;
+
+  @IsOptional()
+  @ValidateIf((o) => o.from !== undefined)
+  @IsDate()
+  to?: Date;
+}
+```
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use filter DTOs | Single validated parameter |
+
+| Add @Type() decorator | Auto-transform strings to numbers/dates |
+
+| Use @IsOptional() | Parameters are optional by default |
+
+| Add default values | Cleaner code with default pagination |
+
+| Create reusable base DTOs | DRY principle for common filters |
+
+| Extend base DTOs | Composable filter combinations |
+
+**Sources:**
+
+- [NestJS Query Parameters Documentation](https://docs.nestjs.com/controllers#query-parameters)
+
+- [class-validator Documentation](https://github.com/typestack/class-validator)
+
+- [class-transformer Documentation](https://github.com/typestack/class-transformer)
+
+- [arielweinberger/nestjs-recipe](https://github.com/arielweinberger/nestjs-recipe) - Production-ready NestJS application
+
+### 5.3 Validate All Inputs with DTOs and ValidationPipe
 
 **Impact: CRITICAL (Prevents invalid data and injection attacks)**
 
@@ -1189,6 +1579,8 @@ export class CreateUserDto {
 
 | `transformOptions.enableImplicitConversion: true` | Auto-converts strings to types | ✅ Yes (convenience) |
 
+> **Note:** For query parameter validation with filter DTOs, see `validation-filter-dtos.md`.
+
 For business-specific validation rules:
 
 **Sources:**
@@ -1205,7 +1597,161 @@ For business-specific validation rules:
 
 **Impact: CRITICAL**
 
-### 6.1 Use Parameterized Queries to Prevent SQL Injection
+### 6.1 Use Custom Repository Pattern for Database Logic Encapsulation
+
+**Impact: HIGH (Separates concerns and improves testability)**
+
+When implementing or reviewing database operations, **always** follow these steps:
+
+**Pattern to check:** Look for `@InjectRepository()`, query builders, or database methods (find, save, update, delete) in service files.
+
+**If found:** Extract to custom repository.
+
+**File:** `tasks/tasks.repository.ts`
+
+**File:** `tasks/tasks.module.ts`
+
+**File:** `tasks/tasks.service.ts`
+
+**Incorrect:**
+
+```typescript
+// tasks/tasks.service.ts - Database logic in service 🚨
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Task } from './task.entity';
+import { GetTasksFilterDto } from './dto/get-tasks-filter.dto';
+import { User } from '../auth/entities/user.entity';
+
+@Injectable()
+export class TasksService {
+  constructor(
+    @InjectRepository(Task) // ❌ Direct repository injection
+    private repo: Repository<Task>
+  ) {}
+
+  async getTasks(filterDto: GetTasksFilterDto, user: User) {
+    const { status, search } = filterDto;
+
+    // ❌ Database query logic in service
+    const query = this.repo.createQueryBuilder('task');
+    query.where({ user });
+
+    if (status) {
+      query.andWhere('task.status = :status', { status });
+    }
+
+    if (search) {
+      query.andWhere('(task.title LIKE :search OR task.description LIKE :search)', {
+        search: `%${search}%`,
+      });
+    }
+
+    return await query.getMany();
+  }
+
+  async findOne(id: string, user: User) {
+    // ❌ Repeated query logic
+    return this.repo.findOne({ where: { id, user } });
+  }
+
+  async create(dto: CreateTaskDto, user: User) {
+    // ❌ Mixed business and data logic
+    const task = this.repo.create({ ...dto, user });
+    return this.repo.save(task);
+  }
+
+  async findOverdue(user: User) {
+    // ❌ Complex query in service - hard to test
+    return this.repo
+      .createQueryBuilder('task')
+      .where('task.user = :user', { user })
+      .andWhere('task.dueDate < :now', { now: new Date() })
+      .andWhere('task.status != :status', { status: TaskStatus.DONE })
+      .getMany();
+  }
+}
+```
+
+**Correct:**
+
+```typescript
+// For TypeORM >= 0.3, @EntityRepository() decorator is deprecated
+// Use dataSource-based approach:
+
+// tasks/repositories/tasks.repository.ts ✅
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { Task } from '../entities/task.entity';
+
+@Injectable()
+export class TasksRepository {
+  private get repo(): Repository<Task> {
+    return this.dataSource.getRepository(Task);
+  }
+
+  constructor(@InjectDataSource() private dataSource: DataSource) {}
+
+  async getTasks(user: User): Promise<Task[]> {
+    return this.repo.find({ where: { user } });
+  }
+
+  async findOne(id: string, user: User): Promise<Task> {
+    const task = await this.repo.findOne({ where: { id, user } });
+    if (!task) {
+      throw new NotFoundException();
+    }
+    return task;
+  }
+}
+
+// Or use the new TypeOrmEx decorator approach:
+// common/decorators/typeorm-ex.decorator.ts ✅
+import { DataSource } from 'typeorm';
+import { TYPEORM_EX_DATA_SOURCE } from './typeorm-ex.constants';
+
+export const TypeormExRepository = <T>(entity: Type<any>) =>
+  InjectDataSource(TYPEORM_EX_DATA_SOURCE);
+
+// tasks/repositories/tasks.repository.ts
+@Injectable()
+export class TasksRepository {
+  constructor(
+    @TypeormExRepository(Task)
+    private dataSource: DataSource,
+  ) {
+    // Use dataSource.getRepository(Task)
+  }
+}
+```
+
+| Practice | Why |
+
+|----------|-----|
+
+| Create custom repositories | Separates data access from business logic |
+
+| Extend TypeORM Repository | Reuse base CRUD methods |
+
+| Put complex queries in repository | Single responsibility, easier testing |
+
+| Keep services clean | Focus on business rules only |
+
+| Inject repository into service | Proper dependency injection |
+
+| Test repositories independently | Isolated data layer testing |
+
+**Sources:**
+
+- [TypeORM Custom Repositories](https://typeorm.io/#/custom-repository)
+
+- [NestJS TypeORM Documentation](https://docs.nestjs.com/techniques/database)
+
+- [arielweinberger/nestjs-recipe](https://github.com/arielweinberger/nestjs-recipe) - Production-ready NestJS application
+
+### 6.2 Use Parameterized Queries to Prevent SQL Injection
 
 **Impact: CRITICAL (Eliminates SQL injection vulnerabilities)**
 
@@ -1343,7 +1889,7 @@ const total = await prisma.order.calculateTotal('order-123');
 
 ## 7. Section 7
 
-**Impact: CRITICAL**
+**Impact: HIGH**
 
 ### 7.1 Use Bun's Built-in Crypto for Secure Password Hashing
 
@@ -1532,7 +2078,129 @@ Bun stores the algorithm in the hash prefix, enabling seamless migration:
 
 - [Argon2 RFC](https://datatracker.ietf.org/doc/html/rfc9106)
 
-### 7.2 Use Guards for Route Protection
+### 7.2 Use Custom Decorators for Type-Safe Request Data Access
+
+**Impact: HIGH (Improves type safety and reduces boilerplate)**
+
+When implementing or reviewing request data access, **always** follow these steps:
+
+**Pattern to check:** Look for direct access to `req.user`, `req.headers`, type assertions, or manual data extraction.
+
+**If found:** Replace with custom decorators.
+
+**File:** `src/auth/decorators/get-user.decorator.ts`
+
+For accessing specific user properties:
+
+**Incorrect:**
+
+```typescript
+// tasks/tasks.controller.ts - Verbose and unsafe 🚨
+import { Controller, Get, Req, Request } from '@nestjs/common';
+import { TasksService } from './tasks.service';
+
+@Controller('tasks')
+export class TasksController {
+  constructor(private tasksService: TasksService) {}
+
+  // ❌ Manual extraction with type assertion
+  @Get()
+  findAll(@Req() req: Request) {
+    const user = req.user as any; // ❌ Type assertion unsafe
+    return this.tasksService.getTasks(user.id);
+  }
+
+  // ❌ Verbose, repeated extraction logic
+  @Get(':id')
+  findOne(@Param('id') id: string, @Req() req: Request) {
+    const user = req.user as User; // ❌ Repeated in every method
+    return this.tasksService.findOne(id, user.id);
+  }
+
+  // ❌ Type assertion everywhere
+  @Post()
+  create(@Body() dto: CreateTaskDto, @Req() req: Request) {
+    const user = req.user as User;
+    return this.tasksService.create(dto, user.id);
+  }
+
+  // ❌ No autocomplete, no type safety
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as User;
+    // Does user.id exist? TypeScript doesn't know
+    return this.tasksService.update(id, dto, user.id);
+  }
+}
+```
+
+**Correct:**
+
+```typescript
+// auth/decorators/get-user.decorator.spec.ts ✅
+import { GetUser } from './get-user.decorator';
+import { ExecutionContext } from '@nestjs/common';
+
+describe('GetUser Decorator', () => {
+  it('should extract user from request', () => {
+    const mockContext = {
+      switchToHttp: () => ({
+        getRequest: () => ({
+          user: { id: '123', email: 'test@example.com' },
+        }),
+      }),
+    } as unknown as ExecutionContext;
+
+    const result = GetUser(null, mockContext);
+
+    expect(result).toEqual({ id: '123', email: 'test@example.com' });
+  });
+
+  it('should extract specific property from user', () => {
+    const mockContext = {
+      switchToHttp: () => ({
+        getRequest: () => ({
+          user: { id: '123', email: 'test@example.com' },
+        }),
+      }),
+    } as unknown as ExecutionContext;
+
+    const result = GetUser('email', mockContext);
+
+    expect(result).toBe('test@example.com');
+  });
+});
+```
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use `@GetUser()` decorator | Type-safe user access with autocomplete |
+
+| Create decorators for repeated extractions | Eliminates boilerplate code |
+
+| Use property selection for single fields | Cleaner code when only one field needed |
+
+| Create decorators for headers, IP, tokens | Consistent request data access |
+
+| Type your decorators with User entity | Full TypeScript support |
+
+| Test decorators independently | Ensures reliable extraction |
+
+**Sources:**
+
+- [NestJS Custom Decorators Documentation](https://docs.nestjs.com/custom-decorators)
+
+- [NestJS Execution Context Documentation](https://docs.nestjs.com/fundamentals/execution-context)
+
+- [arielweinberger/nestjs-recipe](https://github.com/arielweinberger/nestjs-recipe) - Production-ready NestJS application
+
+### 7.3 Use Guards for Route Protection
 
 **Impact: CRITICAL (Enforces authentication/authorization per route)**
 
@@ -2433,6 +3101,140 @@ describe('ScheduledTasksService', () => {
 - [Cron Expression Format | crontab.guru](https://crontab.guru/)
 
 - [Cron Documentation | npm](https://www.npmjs.com/package/cron)
+
+---
+
+## 14. Section 14
+
+**Impact: MEDIUM**
+
+### 14.1 Use Response Transformation Interceptor for Serialization
+
+**Impact: MEDIUM (Prevents sensitive data leaks and ensures consistent response format)**
+
+When implementing or reviewing response handling, **always** follow these steps:
+
+**Pattern to check:** Look for controllers returning entity objects, repositories, or database results directly.
+
+**If found:** Implement TransformInterceptor.
+
+**File:** `src/common/interceptors/transform.interceptor.ts`
+
+**File:** `src/main.ts`
+
+**Incorrect:**
+
+```typescript
+// users/users.controller.ts - Leaks sensitive data 🚨
+import { Controller, Get, Param } from '@nestjs/common';
+import { UsersService } from './users.service';
+
+@Controller('users')
+export class UsersController {
+  constructor(private usersService: UsersService) {}
+
+  // ❌ Returns entity with password field
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    const user = await this.usersService.findOne(id);
+    // Response includes: { id, email, name, password, internalNotes }
+    // Password is exposed!
+    return user;
+  }
+
+  // ❌ Returns raw repository data
+  @Get()
+  async findAll() {
+    // Returns all users with all fields
+    return this.usersService.findAll();
+  }
+
+  // ❌ Manual exclusion - verbose and error-prone
+  @Get('public/:id')
+  async findPublic(@Param('id') id: string) {
+    const user = await this.usersService.findOne(id);
+    // ❌ Must remember to exclude in every method
+    const { password, internalNotes, ...publicUser } = user;
+    return publicUser;
+  }
+}
+
+// users/entities/user.entity.ts - No exclusion decorators 🚨
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  email: string;
+
+  @Column()
+  password: string;  // ❌ Will be included in all responses
+
+  @Column({ name: 'internal_notes' })
+  internalNotes: string;  // ❌ Leaked to clients
+}
+```
+
+**Correct:**
+
+```typescript
+// ✅ Interceptor that handles arrays, pagination, etc.
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import { map, Observable } from 'rxjs';
+import { instanceToPlain } from 'class-transformer';
+
+@Injectable()
+export class TransformInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(
+      map((data) => {
+        // Handle Pagination
+        if (data?.data !== undefined && data?.meta !== undefined) {
+          return {
+            ...data,
+            data: instanceToPlain(data.data),
+          };
+        }
+
+        // Handle Arrays
+        if (Array.isArray(data)) {
+          return data.map((item) => instanceToPlain(item));
+        }
+
+        // Handle single objects
+        return instanceToPlain(data);
+      }),
+    );
+  }
+}
+```
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use `@Exclude()` on sensitive fields | Automatically excluded from all responses |
+
+| Register TransformInterceptor globally | Consistent serialization across all routes |
+
+| Use `@Expose()` for virtual properties | Add computed fields to responses |
+
+| Use groups for role-based responses | Different data for different user types |
+
+| Never return raw entities | Prevents accidental data leaks |
+
+| Handle pagination responses | Transform paginated data correctly |
+
+**Sources:**
+
+- [NestJS Interceptors Documentation](https://docs.nestjs.com/interceptors)
+
+- [class-transformer Documentation](https://github.com/typestack/class-transformer)
+
+- [arielweinberger/nestjs-recipe](https://github.com/arielweinberger/nestjs-recipe) - Production-ready NestJS application
 
 ---
 

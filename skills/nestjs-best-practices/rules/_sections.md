@@ -69,3 +69,8 @@ The section ID (in parentheses) is the filename prefix used to group rules.
 
 **Impact:** HIGH
 **Description:** Advanced patterns like lazy loading, scheduled tasks, and event-driven architecture require careful implementation and deep understanding of NestJS internals.
+
+## 14. Interceptors (interceptors)
+
+**Impact:** MEDIUM
+**Description:** Interceptors provide cross-cutting concerns like response transformation, logging, and caching for consistent behavior across routes.

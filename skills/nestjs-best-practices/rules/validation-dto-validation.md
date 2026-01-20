@@ -132,49 +132,7 @@ import {
 import { Type, Expose } from 'class-transformer';
 ```
 
-## Query Parameter Validation
-
-```typescript
-// dto/query-users.dto.ts
-import { Type } from 'class-transformer';
-import { IsOptional, IsInt, Min, IsEnum, IsString } from 'class-validator';
-
-export class QueryUsersDto {
-  @IsOptional()
-  @Type(() => Number)  // ✅ Transform string → number
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  limit?: number = 10;
-
-  @IsOptional()
-  @IsEnum(['name', 'email', 'createdAt'])
-  sortBy?: string;
-
-  @IsOptional()
-  @IsEnum(['ASC', 'DESC'])
-  order?: 'ASC' | 'DESC' = 'ASC';
-
-  @IsOptional()
-  @IsString()
-  search?: string;
-}
-
-// users.controller.ts
-@Controller('users')
-export class UsersController {
-  @Get()
-  findAll(@Query() query: QueryUsersDto) {
-    // query.page, query.limit are Numbers, not strings
-    return this.usersService.findAll(query);
-  }
-}
-```
+> **Note:** For query parameter validation with filter DTOs, see `validation-filter-dtos.md`.
 
 ## Custom Validators
 
