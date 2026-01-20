@@ -22,8 +22,9 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
 
 0. [Section 0](#0-section-0) — **CRITICAL**
    - 0.1 [Never Hardcode Secrets - Use Environment Variables](#01-never-hardcode-secrets---use-environment-variables)
-   - 0.2 [Use Helmet Middleware for Security Headers](#02-use-helmet-middleware-for-security-headers)
-   - 0.3 [Validate All Inputs with DTOs and ValidationPipe](#03-validate-all-inputs-with-dtos-and-validationpipe)
+   - 0.2 [Organize Code by Feature Modules](#02-organize-code-by-feature-modules)
+   - 0.3 [Use Helmet Middleware for Security Headers](#03-use-helmet-middleware-for-security-headers)
+   - 0.4 [Validate All Inputs with DTOs and ValidationPipe](#04-validate-all-inputs-with-dtos-and-validationpipe)
 
 ---
 
@@ -53,7 +54,55 @@ Always provide a `.env.example` file to document required variables:
 
 - [NestJS Environment Configuration Using Zod | Medium](https://medium.com/@rotemdoar17/nestjs-environment-configuration-using-zod-92e3decca5ca)
 
-### 0.2 Use Helmet Middleware for Security Headers
+### 0.2 Organize Code by Feature Modules
+
+**Impact: HIGH (Improves scalability and maintainability)**
+
+Flat controller/service structure becomes unmaintainable at scale. NestJS modules enforce separation of concerns by feature. **One module per business domain.**
+
+> **Hint**: Use feature modules to encapsulate related controllers, services, and providers. Each module should be independently testable and reusable across the application.
+
+Services can be shared across multiple modules by exporting them:
+
+Use `@Global()` for modules that should be available everywhere without importing:
+
+> **Warning**: Use global modules sparingly. Only use for truly universal services like logging, configuration, or utilities.
+
+Create configurable modules with `register()` or `forRoot()` patterns:
+
+Modules must explicitly declare their dependencies:
+
+Best practice structure for a feature module:
+
+For better performance in large applications:
+
+| Practice | Description | Why |
+
+|----------|-------------|-----|
+
+| One module per feature | Each business domain gets its own module | Clear separation of concerns |
+
+| Export only what's needed | Only export services meant for external use | Prevents tight coupling |
+
+| Use DTOs in each module | Keep data transfer objects with the module | Encapsulates validation logic |
+
+| Avoid circular dependencies | Don't have Module A import Module B if B imports A | Prevents initialization issues |
+
+| Use barrel exports | Export from `index.ts` for clean imports | Better developer experience |
+
+Test modules in isolation:
+
+**Sources:**
+
+- [Modules | NestJS - Official Documentation](https://docs.nestjs.com/modules)
+
+- [Dynamic Modules | NestJS](https://docs.nestjs.com/fundamentals/dynamic-modules)
+
+- [Custom Providers | NestJS](https://docs.nestjs.com/providers#custom-providers)
+
+- [EventEmitter2 | NestJS Recipe](https://docs.nestjs.com/techniques/events)
+
+### 0.3 Use Helmet Middleware for Security Headers
 
 **Impact: CRITICAL (Protects against XSS, clickjacking, and other web attacks)**
 
@@ -175,7 +224,7 @@ await app.register(helmet, {
 
 Reference: [https://docs.nestjs.com/security/helmet](https://docs.nestjs.com/security/helmet)
 
-### 0.3 Validate All Inputs with DTOs and ValidationPipe
+### 0.4 Validate All Inputs with DTOs and ValidationPipe
 
 **Impact: CRITICAL (Prevents invalid data and injection attacks)**
 
