@@ -320,28 +320,6 @@ import { UsersService } from './users.service';
 export class UsersModule {}
 ```
 
-## Lazy-Loading Modules (NestJS Standalone)
-
-For better performance in large applications:
-
-```typescript
-// app.module.ts
-import { Module } from '@nestjs/common';
-
-@Module({
-  imports: [
-    // Eagerly loaded
-    CoreModule,
-    // Lazy loaded (loaded on first request)
-    {
-      module: UsersModule,
-      path: '/users',
-    },
-  ],
-})
-export class AppModule {}
-```
-
 ## Module Best Practices
 
 | Practice | Description | Why |

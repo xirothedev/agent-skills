@@ -22,12 +22,13 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
 
 0. [Section 0](#0-section-0) — **CRITICAL**
    - 0.1 [Enable Global Exception Filter](#01-enable-global-exception-filter)
-   - 0.2 [Never Hardcode Secrets - Use Environment Variables](#02-never-hardcode-secrets---use-environment-variables)
-   - 0.3 [Organize Code by Feature Modules](#03-organize-code-by-feature-modules)
-   - 0.4 [Single Responsibility - Separate Controller and Service](#04-single-responsibility---separate-controller-and-service)
-   - 0.5 [Use Guards for Route Protection](#05-use-guards-for-route-protection)
-   - 0.6 [Use Helmet Middleware for Security Headers](#06-use-helmet-middleware-for-security-headers)
-   - 0.7 [Validate All Inputs with DTOs and ValidationPipe](#07-validate-all-inputs-with-dtos-and-validationpipe)
+   - 0.2 [Lazy Load Non-Critical Modules](#02-lazy-load-non-critical-modules)
+   - 0.3 [Never Hardcode Secrets - Use Environment Variables](#03-never-hardcode-secrets---use-environment-variables)
+   - 0.4 [Organize Code by Feature Modules](#04-organize-code-by-feature-modules)
+   - 0.5 [Single Responsibility - Separate Controller and Service](#05-single-responsibility---separate-controller-and-service)
+   - 0.6 [Use Guards for Route Protection](#06-use-guards-for-route-protection)
+   - 0.7 [Use Helmet Middleware for Security Headers](#07-use-helmet-middleware-for-security-headers)
+   - 0.8 [Validate All Inputs with DTOs and ValidationPipe](#08-validate-all-inputs-with-dtos-and-validationpipe)
 
 ---
 
@@ -135,7 +136,106 @@ Integrate with external logging services:
 
 - [Error Handling Best Practices | OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html)
 
-### 0.2 Never Hardcode Secrets - Use Environment Variables
+### 0.2 Lazy Load Non-Critical Modules
+
+**Impact: HIGH (Reduces startup time and memory usage)**
+
+All modules load at startup, wasting memory on unused features. Lazy loading defers module initialization until the first request to that module. **Load only what's needed, when it's needed.**
+
+> **Hint**: Use lazy loading for administrative panels, analytics dashboards, reporting features, and any route that isn't accessed immediately on application startup. Core features like auth and public APIs should remain eagerly loaded.
+
+Without lazy loading:
+
+With lazy loading:
+
+**Problems:**
+
+```bash
+# Application startup
+[AppModule] initialized
+[UsersModule] initialized
+
+Startup time: 0.5s
+Memory usage: 100MB
+
+# After first admin request
+[AdminModule] loaded
+Memory usage: 150MB (+50MB)
+
+# After first analytics request
+[AnalyticsModule] loaded
+Memory usage: 230MB (+80MB)
+```
+
+- Increased startup time (all modules initialize immediately)
+
+- Higher memory usage (all providers and services loaded)
+
+- Slower cold starts (affects serverless deployments)
+
+- Unused code stays in memory
+
+NestJS supports lazy loading through the `@LazyModuleDecorator` and dynamic imports:
+
+For NestJS 10+, use the built-in `ModuleLoader`:
+
+A more practical approach is lazy loading through routing:
+
+Create a reusable lazy loading decorator:
+
+Using Fastify's plugin system for lazy loading:
+
+Configure which modules to lazy load:
+
+❌ **Don't lazy load:**
+
+- Authentication/Authorization modules (needed immediately)
+
+- Public API routes (accessed by most users)
+
+- Core business logic (used throughout the app)
+
+- Frequently accessed features (would cause repeated loading)
+
+✅ **DO lazy load:**
+
+- Admin panels (accessed by few users, infrequently)
+
+- Analytics dashboards (not accessed on every request)
+
+- Report generators (heavy, infrequently used)
+
+- Integration modules (external service integrations)
+
+- Background job processors (only run periodically)
+
+| Practice | Description |
+
+|----------|-------------|
+
+| Measure before optimizing | Profile startup time and memory usage first |
+
+| Lazy load infrequently used modules | Admin, analytics, reports, integrations |
+
+| Keep critical modules eager | Auth, core API, public routes |
+
+| Preload in development | Faster hot module replacement during development |
+
+| Monitor memory usage | Track actual memory savings in production |
+
+| Consider serverless | Lazy loading is crucial for cold start optimization |
+
+**Sources:**
+
+- [Modules | NestJS - Official Documentation](https://docs.nestjs.com/modules)
+
+- [Dynamic Modules | NestJS](https://docs.nestjs.com/fundamentals/dynamic-modules)
+
+- [Performance Optimization | NestJS](https://docs.nestjs.com/techniques/performance)
+
+- [Serverless NestJS | NestJS Blog](https://trilon.io/blog/serverless-nestjs)
+
+### 0.3 Never Hardcode Secrets - Use Environment Variables
 
 **Impact: CRITICAL (Prevents credential leaks in source control)**
 
@@ -157,7 +257,7 @@ Always provide a `.env.example` file to document required variables:
 
 - [NestJS Environment Configuration Using Zod | Medium](https://medium.com/@rotemdoar17/nestjs-environment-configuration-using-zod-92e3decca5ca)
 
-### 0.3 Organize Code by Feature Modules
+### 0.4 Organize Code by Feature Modules
 
 **Impact: HIGH (Improves scalability and maintainability)**
 
@@ -176,8 +276,6 @@ Create configurable modules with `register()` or `forRoot()` patterns:
 Modules must explicitly declare their dependencies:
 
 Best practice structure for a feature module:
-
-For better performance in large applications:
 
 | Practice | Description | Why |
 
@@ -205,7 +303,7 @@ Test modules in isolation:
 
 - [EventEmitter2 | NestJS Recipe](https://docs.nestjs.com/techniques/events)
 
-### 0.4 Single Responsibility - Separate Controller and Service
+### 0.5 Single Responsibility - Separate Controller and Service
 
 **Impact: HIGH (Makes testing and maintenance easier)**
 
@@ -278,7 +376,7 @@ Controllers SHOULD handle HTTP-specific details:
 
 - [Clean Architecture | Robert C. Martin](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 
-### 0.5 Use Guards for Route Protection
+### 0.6 Use Guards for Route Protection
 
 **Impact: CRITICAL (Enforces authentication/authorization per route)**
 
@@ -330,7 +428,7 @@ Guards can be async for database checks:
 
 - [Throttler | NestJS Throttler Documentation](https://docs.nestjs.com/security/rate-limiting)
 
-### 0.6 Use Helmet Middleware for Security Headers
+### 0.7 Use Helmet Middleware for Security Headers
 
 **Impact: CRITICAL (Protects against XSS, clickjacking, and other web attacks)**
 
@@ -452,7 +550,7 @@ await app.register(helmet, {
 
 Reference: [https://docs.nestjs.com/security/helmet](https://docs.nestjs.com/security/helmet)
 
-### 0.7 Validate All Inputs with DTOs and ValidationPipe
+### 0.8 Validate All Inputs with DTOs and ValidationPipe
 
 **Impact: CRITICAL (Prevents invalid data and injection attacks)**
 
