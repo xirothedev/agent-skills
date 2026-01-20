@@ -32,17 +32,21 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
    - 3.3 [Remove Unused Code and Dependencies](#33-remove-unused-code-and-dependencies)
    - 3.4 [Single Responsibility - Separate Controller and Service](#34-single-responsibility---separate-controller-and-service)
    - 3.5 [Use Consistent Naming Conventions](#35-use-consistent-naming-conventions)
+   - 3.6 [Use Event-Driven Architecture for Loose Coupling](#36-use-event-driven-architecture-for-loose-coupling)
 4. [Section 4](#4-section-4) — **CRITICAL**
    - 4.1 [Enable Global Exception Filter](#41-enable-global-exception-filter)
    - 4.2 [Implement Proper Logging Strategy](#42-implement-proper-logging-strategy)
-5. [Section 5](#5-section-5) — **CRITICAL**
-   - 5.1 [Validate All Inputs with DTOs and ValidationPipe](#51-validate-all-inputs-with-dtos-and-validationpipe)
+5. [Section 5](#5-section-5) — **MEDIUM**
+   - 5.1 [Create Custom Pipes for Query Parameter Transformation](#51-create-custom-pipes-for-query-parameter-transformation)
+   - 5.2 [Validate All Inputs with DTOs and ValidationPipe](#52-validate-all-inputs-with-dtos-and-validationpipe)
 6. [Section 6](#6-section-6) — **CRITICAL**
    - 6.1 [Use Parameterized Queries to Prevent SQL Injection](#61-use-parameterized-queries-to-prevent-sql-injection)
 7. [Section 7](#7-section-7) — **CRITICAL**
-   - 7.1 [Use Guards for Route Protection](#71-use-guards-for-route-protection)
-8. [Section 8](#8-section-8) — **MEDIUM**
+   - 7.1 [Use Bun's Built-in Crypto for Secure Password Hashing](#71-use-buns-built-in-crypto-for-secure-password-hashing)
+   - 7.2 [Use Guards for Route Protection](#72-use-guards-for-route-protection)
+8. [Section 8](#8-section-8) — **HIGH**
    - 8.1 [Generate Swagger/OpenAPI Documentation](#81-generate-swaggeropenapi-documentation)
+   - 8.2 [Use Cursor-Based Pagination for Large Datasets](#82-use-cursor-based-pagination-for-large-datasets)
 9. [Section 9](#9-section-9) — **CRITICAL**
    - 9.1 [Never Hardcode Secrets - Use Environment Variables](#91-never-hardcode-secrets---use-environment-variables)
 10. [Section 10](#10-section-10) — **MEDIUM**
@@ -54,6 +58,7 @@ Comprehensive performance optimization guide for NestJS with expressjs platform 
    - 12.2 [Implement Rate Limiting for All Routes](#122-implement-rate-limiting-for-all-routes)
 13. [Section 13](#13-section-13) — **HIGH**
    - 13.1 [Lazy Load Non-Critical Modules](#131-lazy-load-non-critical-modules)
+   - 13.2 [Use @nestjs/schedule for Cron Jobs and Scheduled Tasks](#132-use-nestjsschedule-for-cron-jobs-and-scheduled-tasks)
 
 ---
 
@@ -524,6 +529,115 @@ findUserById()         // camelCase method ✅
 getUserProfile()       // camelCase method ✅
 ```
 
+### 3.6 Use Event-Driven Architecture for Loose Coupling
+
+**Impact: HIGH (Reduces dependencies and enables scalability)**
+
+Direct service-to-service coupling creates rigid dependencies that are hard to test and maintain. Event-driven architecture uses domain events to decouple modules, allowing them to communicate without knowing about each other. **Never inject services directly just to trigger side effects.**
+
+> **Hint**: When a user registers, you need to send a welcome email, create a profile, and log an audit event. Instead of injecting `EmailService`, `ProfileService`, and `AuditService` into `UsersService`, emit a `UserRegistered` event and let each service handle it independently.
+
+When implementing or reviewing cross-module communication, **always** follow these steps:
+
+**Pattern to check:** Look for multiple service dependencies that trigger side effects.
+
+**If found:** Replace with event emission using EventEmitter2.
+
+**Run in terminal:**
+
+```typescript
+// users.service.spec.ts ✅
+import { EventEmitter2 } from '@nestjs/event-emitter';
+
+describe('UsersService', () => {
+  let service: UsersService;
+  let eventEmitter: EventEmitter2;
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        UsersService,
+        {
+          provide: PrismaService,
+          useValue: { user: { create: jest.fn() } },
+        },
+        {
+          provide: EventEmitter2,
+          useValue: { emit: jest.fn() },
+        },
+      ],
+    }).compile();
+
+    service = module.get(UsersService);
+    eventEmitter = module.get(EventEmitter2);
+  });
+
+  it('should emit user.registered event on registration', async () => {
+    const mockUser = { id: '1', email: 'test@example.com' };
+    jest.spyOn(service['prisma'].user, 'create').mockResolvedValue(mockUser);
+
+    await service.register({ email: 'test@example.com' });
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      'user.registered',
+      expect.any(UserRegisteredEvent)
+    );
+  });
+});
+```
+
+**File:** `src/app.module.ts`
+
+**File:** `src/users/events/user-registered.event.ts`
+
+**File:** `src/users/users.service.ts`
+
+**File:** `src/email/listeners/user.listener.ts`
+
+**File:** `src/email/email.module.ts`
+
+Use this checklist when reviewing or creating cross-module communication:
+
+- [ ] Services don't inject other services just for side effects
+
+- [ ] EventEmitter2 is configured in `app.module.ts`
+
+- [ ] Events are defined as separate classes with types
+
+- [ ] Events are emitted using `eventEmitter.emit()`
+
+- [ ] Event listeners use `@OnEvent()` decorator
+
+- [ ] Listeners are registered in their respective modules
+
+- [ ] Event names use consistent naming convention (e.g., `module.action`)
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use events for cross-module communication | Loose coupling, easier to test |
+
+| Define event classes | Type safety, self-documenting |
+
+| Use consistent naming | `module.action` pattern (e.g., `user.registered`) |
+
+| Handle errors in listeners | Don't let one listener fail all |
+
+| Use async listeners | Don't block main operation |
+
+| Version events | Maintain backwards compatibility |
+
+| Use sagas for workflows | Complex multi-step operations |
+
+**Sources:**
+
+- [EventEmitter2 | NestJS - Official Documentation](https://docs.nestjs.com/techniques/events)
+
+- [Event-Driven Architecture | Martin Fowler](https://martinfowler.com/articles/201701-event-driven.html)
+
+- [Saga Pattern | Microservices.io](https://microservices.io/patterns/data/saga.html)
+
 ---
 
 ## 4. Section 4
@@ -697,9 +811,69 @@ export class UsersService {
 
 ## 5. Section 5
 
-**Impact: CRITICAL**
+**Impact: MEDIUM**
 
-### 5.1 Validate All Inputs with DTOs and ValidationPipe
+### 5.1 Create Custom Pipes for Query Parameter Transformation
+
+**Impact: MEDIUM (Ensures type safety and reduces boilerplate)**
+
+Query parameters are always strings by default. Custom pipes automatically transform and validate these values before they reach your controller, providing type safety and reducing boilerplate code. **Never manually parse query parameters in controllers.**
+
+> **Hint**: NestJS pipes are executed before controllers. Use them to transform `?page=1` into `number: 1`, `?active=true` into `boolean: true`, and trim whitespace from strings automatically.
+
+When implementing or reviewing query parameter handling, **always** follow these steps:
+
+**Pattern to check:** Look for `parseInt()`, `Number()`, `Boolean()`, or string operations in controllers.
+
+**If found:** Create custom pipes to handle the conversion.
+
+**File:** `src/common/pipes/parse-int.pipe.ts`
+
+**File:** `src/common/pipes/trim.pipe.ts`
+
+**File:** `src/common/pipes/parse-boolean.pipe.ts`
+
+Use this checklist when reviewing or creating query parameter handling:
+
+- [ ] No manual `parseInt()` or `Number()` in controllers
+
+- [ ] No manual `toLowerCase()` or `trim()` in controllers
+
+- [ ] All numeric query params use `ParseIntPipe` or `ParseFloatPipe`
+
+- [ ] All boolean query params use `ParseBooleanPipe`
+
+- [ ] All string params use `TrimPipe` if whitespace matters
+
+- [ ] Optional params use `optional: true` pipe option
+
+- [ ] Error messages from pipes are user-friendly
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use pipes for conversion | Consistent transformation, reusable |
+
+| Make pipes reusable | Add optional/min/max options |
+
+| Return user-friendly errors | Help API consumers fix their requests |
+
+| Use `DefaultValuePipe` | Set sensible defaults |
+
+| Combine pipes | Chain multiple transformations |
+
+| Test pipes independently | Ensure reliability |
+
+**Sources:**
+
+- [Pipes | NestJS - Official Documentation](https://docs.nestjs.com/pipes)
+
+- [Custom Pipes | NestJS Documentation](https://docs.nestjs.com/techniques/validation)
+
+- [Query String Params | MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams)
+
+### 5.2 Validate All Inputs with DTOs and ValidationPipe
 
 **Impact: CRITICAL (Prevents invalid data and injection attacks)**
 
@@ -773,34 +947,89 @@ For business-specific validation rules:
 
 Raw SQL queries with string concatenation allow attackers to inject malicious code. Prisma Client automatically parameterizes all queries, preventing injection. **Never use string concatenation with user input.**
 
-**Incorrect: SQL injection vulnerable**
+> **Hint**: Prisma v7 introduces the new `sql` template tag for raw queries. Always use tagged template literals instead of string concatenation. Prisma automatically parameterizes all variables passed to template tags.
+
+When implementing or reviewing database queries, **always** follow these steps:
+
+**Pattern to check:** Look for `$queryRaw`, `$executeRaw`, or `sql` template tag usage.
+
+**If found:** Replace with Prisma v7 `sql` template tag or typed queries.
+
+**File:** Any service using Prisma
+
+**Prisma v7 transaction pattern:**
 
 ```typescript
-// Raw SQL concatenation - DANGEROUS 🚨
-const userId = req.params.id;
-const query = `SELECT * FROM users WHERE name = '${userId}'`; 
-await prisma.$executeRaw(query);
-```
-
-**Correct: Prisma safe queries**
-
-```typescript
-// Prisma ORM - Safe ✅
-const user = await prisma.user.findUnique({
-  where: { id: userId }
+// Extended client with custom methods
+const prisma = new PrismaClient().$extends({
+  model: {
+    user: {
+      async findByEmail(email: string) {
+        return prisma.user.findUnique({ where: { email } });
+      },
+      async findActive() {
+        return prisma.user.findMany({ where: { status: 'ACTIVE' } });
+      },
+    },
+    order: {
+      async calculateTotal(orderId: string) {
+        const items = await prisma.orderItem.findMany({
+          where: { orderId },
+        });
+        return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      },
+    },
+  },
 });
 
-// Prisma raw with parameters
-const users = await prisma.$queryRaw`
-  SELECT * FROM users 
-  WHERE email = ${email} AND status = ${status}
-`;
-
-// Or with positional params
-const results = await prisma.$queryRaw`
-  SELECT * FROM users WHERE id = $1
-`, userId;
+// Usage
+const user = await prisma.user.findByEmail('user@example.com');
+const total = await prisma.order.calculateTotal('order-123');
 ```
+
+**File:** `src/database/prisma.service.ts` or similar
+
+Use this checklist when reviewing or creating database queries:
+
+- [ ] No string concatenation in SQL queries
+
+- [ ] All `$queryRaw` uses template literals with variables
+
+- [ ] All `$executeRaw` uses template literals with variables
+
+- [ ] Prisma v7 `sql` template tag imported when needed
+
+- [ ] Transactions use async callback pattern
+
+- [ ] Client extensions use `$extends()` method
+
+- [ ] User input never interpolated directly into SQL
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use typed queries | Type-safe, auto-parameterized |
+
+| Avoid raw queries when possible | Prisma handles security automatically |
+
+| Use `sql` template tag | Auto-parameterizes variables |
+
+| Never concatenate strings | Prevents SQL injection |
+
+| Use interactive transactions | Better error handling in v7 |
+
+| Use client extensions | Reusable query patterns |
+
+**Sources:**
+
+- [Prisma v7 Release Notes](https://www.prisma.io/docs/reference/api-reference/prisma-client-reference)
+
+- [Raw Database Queries | Prisma Documentation](https://www.prisma.io/docs/orm/prisma-client/queries/raw-database-access)
+
+- [Transactions | Prisma Documentation](https://www.prisma.io/docs/orm/prisma-client/transactions)
+
+- [SQL Injection | OWASP](https://owasp.org/www-community/attacks/SQL_Injection)
 
 ---
 
@@ -808,7 +1037,135 @@ const results = await prisma.$queryRaw`
 
 **Impact: CRITICAL**
 
-### 7.1 Use Guards for Route Protection
+### 7.1 Use Bun's Built-in Crypto for Secure Password Hashing
+
+**Impact: CRITICAL (Prevents password leak breaches)**
+
+Storing passwords in plain text is a critical security vulnerability. When a database is compromised, plain text passwords expose users to credential stuffing and account takeover across all services where they reuse passwords. **Never store plain text passwords or use weak hashing.**
+
+> **Hint**: Bun provides a built-in `Crypto` module with secure password hashing supporting both **argon2** (default) and **bcrypt** algorithms. The algorithm is configurable at runtime via `algorithm: 'argon2id' | 'bcrypt'` option. No external packages needed.
+
+When implementing or reviewing password handling, **always** follow these steps:
+
+**Pattern to check:** Look for passwords being stored directly or hashed with weak algorithms.
+
+**If found:** Replace with Bun's `Crypto.password.hash()`.
+
+**File:** `src/auth/password.service.ts`
+
+**File:** `src/auth/dto/register.dto.ts`
+
+Use this checklist when reviewing or creating password handling:
+
+- [ ] Passwords are never stored in plain text
+
+- [ ] Passwords are hashed with `Bun.password.hash()`
+
+- [ ] Passwords are verified with `Bun.password.verify()`
+
+- [ ] Passwords have minimum length requirement (12+ characters)
+
+- [ ] Passwords require mixed case, numbers, special characters
+
+- [ ] Database column for hashed password is `TEXT` or `VARCHAR(255)`
+
+- [ ] Error messages don't reveal if user exists
+
+Bun's password hashing supports both algorithms at runtime. The algorithm choice is stored in the hash prefix, so `verify()` auto-detects which algorithm was used.
+
+**Use argon2id when:**
+
+```typescript
+// ✅ For legacy compatibility or cross-platform needs
+async hash(password: string) {
+  return Bun.password.hash(password, {
+    algorithm: 'bcrypt',
+    cost: 12,  // Work factor (2^12 iterations)
+  });
+}
+```
+
+- Starting a new application (recommended default)
+
+- Maximum security against GPU/ASIC attacks is required
+
+- Memory-hard hashing is acceptable
+
+- Compliance requirements mandate modern algorithms
+
+**Use bcrypt when:**
+
+```typescript
+// auth/auth.service.ts ✅
+@Injectable()
+export class AuthService {
+  async login(dto: LoginDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    const isValid = user
+      ? await this.passwordService.verify(dto.password, user.password)
+      : false;
+
+    // ✅ Log failed attempts (but not passwords!)
+    if (!isValid) {
+      await this.auditService.log({
+        event: 'LOGIN_FAILED',
+        email: dto.email,
+        ip: dto.ip,
+        userAgent: dto.userAgent,
+      });
+    }
+
+    // ... rest of logic
+  }
+}
+```
+
+- Migrating from existing bcrypt hashes
+
+- Need compatibility with older systems/libraries
+
+- Memory constraints prevent argon2 usage
+
+- Regulatory requirements specifically mandate bcrypt
+
+Bun stores the algorithm in the hash prefix, enabling seamless migration:
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use `Bun.password.hash()` | Argon2/bcrypt with runtime algorithm selection |
+
+| Use `Bun.password.verify()` | Auto-detects algorithm, timing-safe comparison |
+
+| Prefer argon2 for new apps | Memory-hard, GPU-resistant, modern standard |
+
+| Use bcrypt for compatibility | Legacy systems, cross-platform needs |
+
+| Configure algorithm at runtime | Environment-specific, flexible migration |
+
+| Enforce strong passwords | Prevents brute force attacks |
+
+| Generic error messages | Prevents user enumeration |
+
+| Never log passwords | Logs can be compromised |
+
+| Rehash on algorithm upgrade | Seamless migration between algorithms |
+
+| Rate limit auth endpoints | Prevents brute force attacks |
+
+**Sources:**
+
+- [Bun Crypto Documentation](https://bun.sh/docs/api/crypto)
+
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+
+- [Argon2 RFC](https://datatracker.ietf.org/doc/html/rfc9106)
+
+### 7.2 Use Guards for Route Protection
 
 **Impact: CRITICAL (Enforces authentication/authorization per route)**
 
@@ -930,7 +1287,7 @@ Use this checklist when reviewing or creating endpoints:
 
 ## 8. Section 8
 
-**Impact: MEDIUM**
+**Impact: HIGH**
 
 ### 8.1 Generate Swagger/OpenAPI Documentation
 
@@ -987,6 +1344,88 @@ export class UsersController {
   }
 }
 ```
+
+### 8.2 Use Cursor-Based Pagination for Large Datasets
+
+**Impact: HIGH (10-100x faster than offset for large datasets)**
+
+Offset-based pagination (`OFFSET` + `LIMIT`) becomes slow as the offset grows because the database must scan and discard all previous rows. Cursor-based pagination uses indexed columns to jump directly to the correct position, providing consistent performance regardless of page depth.
+
+> **Hint**: Use cursor pagination for infinite scroll, real-time feeds, and large datasets. Keep offset pagination only for small datasets with direct page jumping.
+
+When implementing or reviewing pagination, **always** follow these steps:
+
+**Pattern to check:** Look for `skip`/`take` or `offset`/`limit` parameters.
+
+**If found:** Replace offset pagination with cursor pagination.
+
+**File:** `src/common/dto/pagination.dto.ts`
+
+**File:** `src/users/users.service.ts`
+
+**File:** `src/users/interfaces/paginated-result.interface.ts`
+
+Use this checklist when reviewing or creating paginated endpoints:
+
+- [ ] Pagination uses cursor-based approach (not offset/skip)
+
+- [ ] Cursor is based on indexed column (usually `id` or `createdAt`)
+
+- [ ] Response includes `hasNextPage`/`hasPreviousPage` flags
+
+- [ ] Response includes `startCursor`/`endCursor` for navigation
+
+- [ ] Fetches one extra item to determine if there's a next page
+
+- [ ] Handles edge cases (first page, last page, empty results)
+
+- [ ] Cursor is safely encoded/decoded (base64url recommended)
+
+| Aspect | Offset Pagination | Cursor Pagination |
+
+|--------|------------------|-------------------|
+
+| **Performance** | Degrades with page number | Consistent |
+
+| **Deep pages** | Very slow (scans rows) | Same speed as page 1 |
+
+| **Page jumping** | Easy (go to page 100) | Not supported |
+
+| **Real-time updates** | Shows duplicate/missing items | Handles new items well |
+
+| **Implementation** | Simple | More complex |
+
+| **Use case** | Small datasets, admin panels | Infinite scroll, feeds |
+
+**Use Cursor Pagination When:**
+
+- Large datasets (>10,000 rows)
+
+- Infinite scroll UI
+
+- Real-time data feeds
+
+- Mobile apps (better performance)
+
+- Social media-style pagination
+
+**Use Offset Pagination When:**
+
+- Small datasets (<1,000 rows)
+
+- Need page jumping (direct page access)
+
+- Admin panels with pagination controls
+
+- Static data that doesn't change often
+
+**Sources:**
+
+- [Pagination | Prisma Documentation](https://www.prisma.io/docs/concepts/components/prisma-client/pagination)
+
+- [Relay Cursor Connections Specification](https://relay.dev/graphql/connections.htm)
+
+- [PostgreSQL Index-Only Scans](https://www.postgresql.org/docs/current/indexes-index-only-scans.html)
 
 ---
 
@@ -1300,6 +1739,129 @@ Configure which modules to lazy load:
 - [Performance Optimization | NestJS](https://docs.nestjs.com/techniques/performance)
 
 - [Serverless NestJS | NestJS Blog](https://trilon.io/blog/serverless-nestjs)
+
+### 13.2 Use @nestjs/schedule for Cron Jobs and Scheduled Tasks
+
+**Impact: MEDIUM (Ensures reliable periodic task execution)**
+
+Scheduled tasks like cleanup jobs, data synchronization, and periodic reports need reliable execution. The `@nestjs/schedule` module provides decorators for cron jobs, intervals, and timeouts with proper NestJS lifecycle management. **Never use raw `setInterval` or external cron schedulers.**
+
+> **Hint**: Use `@Cron()` for recurring tasks (daily backups, hourly cleanup), `@Interval()` for fixed-frequency tasks (every 5 minutes), and `@Timeout()` for one-time delayed execution. Always handle errors to prevent repeated failures.
+
+When implementing or reviewing scheduled tasks, **always** follow these steps:
+
+**Pattern to check:** Look for `setInterval`, `setTimeout`, or external schedulers like `node-cron`.
+
+**If found:** Replace with `@nestjs/schedule` decorators.
+
+**Run in terminal:**
+
+```typescript
+// tasks/scheduled-tasks.service.spec.ts ✅
+import { Test, TestingModule } from '@nestjs/testing';
+import { ScheduledTasksService } from './scheduled-tasks.service';
+import { SchedulerRegistry } from '@nestjs/schedule';
+
+describe('ScheduledTasksService', () => {
+  let service: ScheduledTasksService;
+  let schedulerRegistry: SchedulerRegistry;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ScheduledTasksService,
+        {
+          provide: PrismaService,
+          useValue: { session: { deleteMany: jest.fn() } },
+        },
+        {
+          provide: SchedulerRegistry,
+          useValue: {
+            addCronJob: jest.fn(),
+            getCronJob: jest.fn(),
+            deleteCronJob: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<ScheduledTasksService>(ScheduledTasksService);
+    schedulerRegistry = module.get<SchedulerRegistry>(SchedulerRegistry);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  it('should cleanup expired sessions', async () => {
+    const deleteMany = jest.fn().mockResolvedValue({ count: 5 });
+    service['prisma'].session.deleteMany = deleteMany;
+
+    await service.cleanupExpiredSessions();
+
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { expiresAt: { lt: expect.any(Date) } },
+    });
+  });
+
+  it('should handle errors gracefully', async () => {
+    const loggerSpy = jest.spyOn(service['logger'], 'error');
+    jest.spyOn(service['prisma'].session, 'deleteMany').mockRejectedValue(
+      new Error('Database error')
+    );
+
+    await service.cleanupExpiredSessions();
+
+    expect(loggerSpy).toHaveBeenCalled();
+  });
+});
+```
+
+**File:** `src/app.module.ts`
+
+**File:** `src/tasks/scheduled-tasks.service.ts`
+
+Use this checklist when reviewing or creating scheduled tasks:
+
+- [ ] No raw `setInterval` or `setTimeout` used
+
+- [ ] ScheduleModule is imported in `app.module.ts`
+
+- [ ] Scheduled tasks use `@Cron()`, `@Interval()`, or `@Timeout()`
+
+- [ ] All scheduled methods have error handling (try/catch)
+
+- [ ] Long-running tasks have overlap prevention
+
+- [ ] Cron expressions use `CronExpression` enum when possible
+
+- [ ] Tasks log start/completion for monitoring
+
+| Practice | Why |
+
+|----------|-----|
+
+| Use `@nestjs/schedule` decorators | Proper NestJS lifecycle management |
+
+| Use `CronExpression` enum | Readable, less error-prone |
+
+| Always handle errors | Prevent cascading failures |
+
+| Prevent overlapping executions | Avoid resource exhaustion |
+
+| Log task execution | Monitor and debug issues |
+
+| Use `@Interval()` for simple frequencies | More readable than cron |
+
+| Use `@Timeout()` for startup tasks | One-time initialization |
+
+**Sources:**
+
+- [Task Scheduling | NestJS - Official Documentation](https://docs.nestjs.com/techniques/task-scheduling)
+
+- [Cron Expression Format | crontab.guru](https://crontab.guru/)
+
+- [Cron Documentation | npm](https://www.npmjs.com/package/cron)
 
 ---
 

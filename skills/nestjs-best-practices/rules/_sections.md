@@ -43,7 +43,7 @@ The section ID (in parentheses) is the filename prefix used to group rules.
 ## 8. API (api)
 
 **Impact:** MEDIUM
-**Description:** Well-designed APIs with consistent patterns, proper documentation (Swagger), and health checks improve developer experience and client integration.
+**Description:** Well-designed APIs with consistent patterns, proper documentation (Swagger), and pagination improve developer experience and client integration.
 
 ## 9. Config (config)
 
@@ -68,4 +68,4 @@ The section ID (in parentheses) is the filename prefix used to group rules.
 ## 13. Advanced (advanced)
 
 **Impact:** HIGH
-**Description:** Advanced patterns like lazy loading for specific use cases require careful implementation and deep understanding of NestJS internals.
+**Description:** Advanced patterns like lazy loading, scheduled tasks, and event-driven architecture require careful implementation and deep understanding of NestJS internals.
