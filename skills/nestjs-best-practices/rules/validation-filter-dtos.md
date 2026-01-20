@@ -220,18 +220,18 @@ export class TasksRepository extends Repository<Task> {
 ```typescript
 // ✅ OPTIONAL: Date range DTO
 // common/dto/date-range.dto.ts
-import { IsOptional, IsString, validate } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsOptional, IsDate } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class DateRangeDto {
   @IsOptional()
-  @IsString()
-  @Transform(({ value }) => value ? new Date(value) : undefined)
+  @Type(() => Date)
+  @IsDate()
   startDate?: Date;
 
   @IsOptional()
-  @IsString()
-  @Transform(({ value }) => value ? new Date(value) : undefined)
+  @Type(() => Date)
+  @IsDate()
   endDate?: Date;
 }
 
@@ -249,11 +249,13 @@ export class GetTasksFilterDto extends PaginationDto {
   search?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value ? new Date(value) : undefined)
+  @Type(() => Date)
+  @IsDate()
   createdAfter?: Date;
 
   @IsOptional()
-  @Transform(({ value }) => value ? new Date(value) : undefined)
+  @Type(() => Date)
+  @IsDate()
   createdBefore?: Date;
 }
 ```
@@ -535,11 +537,13 @@ export class GetTasksFilterDto extends BaseFilterDto {
   search?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value ? new Date(value) : undefined)
+  @Type(() => Date)
+  @IsDate()
   from?: Date;
 
   @IsOptional()
-  @Transform(({ value }) => value ? new Date(value) : undefined)
+  @Type(() => Date)
+  @IsDate()
   to?: Date;
 }
 ```
