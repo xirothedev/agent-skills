@@ -6,8 +6,6 @@ impactDescription: Makes testing and maintenance easier
 tags: architecture, separation, testing, SRP
 ---
 
-## Single Responsibility - Separate Controller and Service
-
 Fat controllers mix HTTP concerns with business logic, making unit testing impossible. Controllers should only parse HTTP requests and delegate. **Controllers are thin, services are smart.**
 
 > **Hint**: Controllers handle HTTP-specific concerns (validation, parsing, status codes). Services handle business logic (calculations, workflows, data transformations). This separation makes both layers independently testable.
@@ -23,7 +21,7 @@ Fat controllers mix HTTP concerns with business logic, making unit testing impos
 | Set headers/cookies | Call external APIs |
 | Upload/download files | Enforce business rules |
 
-## Incorrect (Fat Controller - Multiple Responsibilities)
+**Incorrect:**
 
 ```typescript
 @Controller('orders')
@@ -80,7 +78,7 @@ export class OrdersController {
 - Difficult to mock dependencies for testing
 - Changes to business logic require HTTP layer changes
 
-## Correct (Thin Controller + Service Layer)
+**Correct:**
 
 ```typescript
 // orders/orders.controller.ts

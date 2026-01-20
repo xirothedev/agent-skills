@@ -38,7 +38,7 @@ Default Express errors leak stack traces and database info to clients. Global fi
 }
 ```
 
-## Incorrect (No Exception Handling)
+**Incorrect:**
 
 ```typescript
 // main.ts
@@ -61,7 +61,7 @@ export class UsersService {
 }
 ```
 
-## Correct (Global Exception Filter)
+**Correct:**
 
 ### Basic Implementation
 

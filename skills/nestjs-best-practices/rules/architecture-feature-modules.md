@@ -12,7 +12,7 @@ Flat controller/service structure becomes unmaintainable at scale. NestJS module
 
 > **Hint**: Use feature modules to encapsulate related controllers, services, and providers. Each module should be independently testable and reusable across the application.
 
-### Incorrect (monolithic structure):
+**Incorrect:**
 
 ```
 src/
@@ -26,7 +26,7 @@ src/
   orders.service.ts
 ```
 
-### Correct (modular structure):
+**Correct:**
 
 ```
 src/

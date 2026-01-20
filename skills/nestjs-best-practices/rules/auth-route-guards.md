@@ -6,8 +6,6 @@ impactDescription: Enforces authentication/authorization per route
 tags: security, guards, auth, authorization
 ---
 
-## Use Guards for Route Protection
-
 Unprotected routes expose sensitive data. Guards run before controllers and can short-circuit requests. **Protect endpoints explicitly.**
 
 > **Hint**: Guards determine whether a request will be handled by the controller or not. Use them for authentication (who are you?) and authorization (what can you do?). Always use global guards with public route decorators for default-deny security.
@@ -158,7 +156,7 @@ bun add @nestjs/jwt @nestjs/passport passport passport-jwt
 bun add -D @types/passport-jwt
 ```
 
-## Incorrect (No Protection)
+**Incorrect:**
 
 ```typescript
 // users.controller.ts - All routes exposed 🚨
@@ -181,7 +179,7 @@ export class UsersController {
 }
 ```
 
-## Correct (Protected with Global Guard)
+**Correct:**
 
 ```typescript
 // auth/guards/jwt-auth.guard.ts

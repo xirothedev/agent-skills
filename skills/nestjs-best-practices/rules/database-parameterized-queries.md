@@ -6,8 +6,6 @@ impactDescription: Eliminates SQL injection vulnerabilities
 tags: security, database, sql-injection, prisma
 ---
 
-## Use Parameterized Queries to Prevent SQL Injection
-
 Raw SQL queries with string concatenation allow attackers to inject malicious code. Prisma Client automatically parameterizes all queries, preventing injection. **Never use string concatenation with user input.**
 
 > **Hint**: Prisma v7 introduces the new `sql` template tag for raw queries. Always use tagged template literals instead of string concatenation. Prisma automatically parameterizes all variables passed to template tags.
@@ -135,7 +133,7 @@ Use this checklist when reviewing or creating database queries:
 - [ ] Client extensions use `$extends()` method
 - [ ] User input never interpolated directly into SQL
 
-## Incorrect (SQL Injection Vulnerable)
+**Incorrect:**
 
 ```typescript
 // users.service.ts - DANGEROUS 🚨
@@ -176,7 +174,7 @@ export class UsersService {
 }
 ```
 
-## Correct (Parameterized with Prisma v7)
+**Correct:**
 
 ```typescript
 // users.service.ts - SAFE ✅

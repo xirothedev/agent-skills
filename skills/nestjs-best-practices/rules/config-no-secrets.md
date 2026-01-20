@@ -16,7 +16,7 @@ Hardcoded credentials in source code get committed to git and exposed publicly. 
 bun add @nestjs/config
 ```
 
-### Incorrect (credentials exposed):
+**Incorrect:**
 
 ```typescript
 // database.module.ts
@@ -38,7 +38,7 @@ export class AuthService {
 const stripe = require('stripe')('sk_test_51ABC...');  // 🚨 Exposed!
 ```
 
-### Correct (environment config):
+**Correct:**
 
 ```typescript
 // app.module.ts

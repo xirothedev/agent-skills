@@ -6,8 +6,6 @@ impactDescription: Reduces dependencies and enables scalability
 tags: architecture, events, EventEmitter2, loose-coupling
 ---
 
-## Use Event-Driven Architecture for Loose Coupling
-
 Direct service-to-service coupling creates rigid dependencies that are hard to test and maintain. Event-driven architecture uses domain events to decouple modules, allowing them to communicate without knowing about each other. **Never inject services directly just to trigger side effects.**
 
 > **Hint**: When a user registers, you need to send a welcome email, create a profile, and log an audit event. Instead of injecting `EmailService`, `ProfileService`, and `AuditService` into `UsersService`, emit a `UserRegistered` event and let each service handle it independently.
@@ -192,7 +190,7 @@ Use this checklist when reviewing or creating cross-module communication:
 - [ ] Listeners are registered in their respective modules
 - [ ] Event names use consistent naming convention (e.g., `module.action`)
 
-## Incorrect (Tight Coupling)
+**Incorrect:**
 
 ```typescript
 // users.service.ts - Tight coupling 🚨
@@ -234,7 +232,7 @@ export class UsersService {
 }
 ```
 
-## Correct (Event-Driven)
+**Correct:**
 
 ```typescript
 // users/users.service.ts - Event-driven ✅

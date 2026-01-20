@@ -6,8 +6,6 @@ impactDescription: Prevents password leak breaches
 tags: auth, security, password-hashing, bun, crypto, argon2, bcrypt
 ---
 
-## Use Bun's Built-in Crypto for Secure Password Hashing
-
 Storing passwords in plain text is a critical security vulnerability. When a database is compromised, plain text passwords expose users to credential stuffing and account takeover across all services where they reuse passwords. **Never store plain text passwords or use weak hashing.**
 
 > **Hint**: Bun provides a built-in `Crypto` module with secure password hashing supporting both **argon2** (default) and **bcrypt** algorithms. The algorithm is configurable at runtime via `algorithm: 'argon2id' | 'bcrypt'` option. No external packages needed.
@@ -194,7 +192,7 @@ Use this checklist when reviewing or creating password handling:
 - [ ] Database column for hashed password is `TEXT` or `VARCHAR(255)`
 - [ ] Error messages don't reveal if user exists
 
-## Incorrect (Insecure Password Handling)
+**Incorrect:**
 
 ```typescript
 // auth/auth.service.ts - Insecure 🚨
@@ -239,7 +237,7 @@ export class AuthService {
 }
 ```
 
-## Correct (Secure with Bun's Native Crypto)
+**Correct:**
 
 ```typescript
 // auth/password.service.ts - Secure ✅

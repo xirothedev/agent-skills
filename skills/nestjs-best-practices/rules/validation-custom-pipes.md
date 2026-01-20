@@ -6,8 +6,6 @@ impactDescription: Ensures type safety and reduces boilerplate
 tags: validation, pipes, transformation, type-safety
 ---
 
-## Create Custom Pipes for Query Parameter Transformation
-
 Query parameters are always strings by default. Custom pipes automatically transform and validate these values before they reach your controller, providing type safety and reducing boilerplate code. **Never manually parse query parameters in controllers.**
 
 > **Hint**: NestJS pipes are executed before controllers. Use them to transform `?page=1` into `number: 1`, `?active=true` into `boolean: true`, and trim whitespace from strings automatically.
@@ -193,7 +191,7 @@ Use this checklist when reviewing or creating query parameter handling:
 - [ ] Optional params use `optional: true` pipe option
 - [ ] Error messages from pipes are user-friendly
 
-## Incorrect (Manual Conversion)
+**Incorrect:**
 
 ```typescript
 // users.controller.ts - Manual type conversion 🚨
@@ -231,7 +229,7 @@ export class UsersController {
 }
 ```
 
-## Correct (Custom Pipes)
+**Correct:**
 
 ```typescript
 // common/pipes/parse-int.pipe.ts ✅

@@ -10,35 +10,7 @@ tags: performance, modules, lazy-loading, optimization
 
 All modules load at startup, wasting memory on unused features. Lazy loading defers module initialization until the first request to that module. **Load only what's needed, when it's needed.**
 
-> **Hint**: Use lazy loading for administrative panels, analytics dashboards, reporting features, and any route that isn't accessed immediately on application startup. Core features like auth and public APIs should remain eagerly loaded.
-
-## How Lazy Loading Works
-
-Without lazy loading:
-```
-Server Start → Load ALL modules → Ready to serve
-         └─ UsersModule (50ms)
-         └─ AdminModule (100ms)  ← Wastes resources if unused
-         └─ AnalyticsModule (150ms) ← Wastes resources if unused
-         └─ ReportsModule (200ms)
-Total startup: 500ms
-```
-
-With lazy loading:
-```
-Server Start → Load core modules → Ready to serve
-         └─ AppModule (50ms)
-         └─ UsersModule (50ms)
-Total startup: 100ms
-
-First /admin request → Load AdminModule → Serve response
-                            (100ms)
-
-First /analytics request → Load AnalyticsModule → Serve response
-                               (150ms)
-```
-
-## Incorrect (Everything Loads at Startup)
+**Incorrect:**
 
 ```typescript
 // app.module.ts
@@ -60,15 +32,7 @@ import { ReportsModule } from './reports/reports.module';
 export class AppModule {}
 ```
 
-**Problems:**
-- Increased startup time (all modules initialize immediately)
-- Higher memory usage (all providers and services loaded)
-- Slower cold starts (affects serverless deployments)
-- Unused code stays in memory
-
-## Correct (Lazy Loading with Dynamic Imports)
-
-NestJS supports lazy loading through the `@LazyModuleDecorator` and dynamic imports:
+**Correct:**
 
 ```typescript
 // app.module.ts

@@ -6,8 +6,6 @@ impactDescription: 10-100x faster than offset for large datasets
 tags: api, pagination, performance, prisma
 ---
 
-## Use Cursor-Based Pagination for Large Datasets
-
 Offset-based pagination (`OFFSET` + `LIMIT`) becomes slow as the offset grows because the database must scan and discard all previous rows. Cursor-based pagination uses indexed columns to jump directly to the correct position, providing consistent performance regardless of page depth.
 
 > **Hint**: Use cursor pagination for infinite scroll, real-time feeds, and large datasets. Keep offset pagination only for small datasets with direct page jumping.
@@ -148,7 +146,7 @@ Use this checklist when reviewing or creating paginated endpoints:
 - [ ] Handles edge cases (first page, last page, empty results)
 - [ ] Cursor is safely encoded/decoded (base64url recommended)
 
-## Incorrect (Offset Pagination)
+**Incorrect:**
 
 ```typescript
 // dto/get-users.dto.ts - Offset pagination 🚨
@@ -210,7 +208,7 @@ export class UsersService {
  */
 ```
 
-## Correct (Cursor Pagination)
+**Correct:**
 
 ```typescript
 // dto/get-users.dto.ts - Cursor pagination ✅

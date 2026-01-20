@@ -10,100 +10,10 @@ tags: validation, security, dto, class-validator
 
 Unvalidated inputs lead to runtime errors, SQL injection, and security vulnerabilities. Global ValidationPipe ensures every DTO is validated before reaching controllers. **Never trust client data.**
 
-> **Hint**: Apply ValidationPipe globally in `main.ts` to ensure all routes are protected. Use `transform: true` to automatically convert plain objects to DTO class instances.
-
-## For AI Agents
-
-When implementing or reviewing code, **always** follow these steps:
-
-### Step 1: Check Global ValidationPipe
-**File:** `src/main.ts`
+**Incorrect:**
 
 ```typescript
-// ✅ REQUIRED: Must have this in main.ts
-app.useGlobalPipes(new ValidationPipe({
-  whitelist: true,
-  forbidNonWhitelisted: true,
-  transform: true,
-  transformOptions: { enableImplicitConversion: true },
-  disableErrorMessages: false,
-}));
-```
-
-**If missing:** Add the ValidationPipe setup before `app.listen()`.
-
-### Step 2: Verify All Controllers Use Typed DTOs
-**Check pattern:** Controllers should NOT use `any` type for request bodies.
-
-```typescript
-// ❌ WRONG - No validation
-@Post()
-create(@Body() data: any) { }
-
-// ❌ WRONG - Plain object
-@Post()
-create(@Body() data: CreateUserDto) { }  // No class transformation
-
-// ✅ CORRECT - Typed DTO with decorators
-@Post()
-create(@Body() createUserDto: CreateUserDto) { }
-```
-
-### Step 3: Ensure DTOs Have Validation Decorators
-**Check pattern:** All DTO properties must have decorators from `class-validator`.
-
-```typescript
-// ✅ REQUIRED pattern
-export class CreateUserDto {
-  @IsEmail()
-  email: string;
-
-  @IsString()
-  @MinLength(8)
-  password: string;
-}
-```
-
-### Step 4: Add Transform for Type Conversion
-**Check pattern:** Use `@Type()` for non-string types from query params.
-
-```typescript
-// ✅ REQUIRED for query params with types
-export class GetUsersDto {
-  @IsOptional()
-  @Type(() => Number)  // Transform string to number
-  @IsInt()
-  page?: number;
-
-  @IsOptional()
-  @Type(() => Boolean)
-  active?: boolean;
-}
-```
-
-## Installation
-
-```bash
-bun add class-validator class-transformer
-```
-
-## Quick Reference Checklist
-
-Use this checklist when reviewing or creating endpoints:
-
-- [ ] Global ValidationPipe configured in `main.ts`
-- [ ] All controller methods use typed DTOs (not `any`)
-- [ ] All DTO properties have validation decorators
-- [ ] Query params use `@Type()` decorator for number/boolean/date
-- [ ] Optional fields use `@IsOptional()`
-- [ ] Enums use `@IsEnum()` decorator
-- [ ] Arrays use `@IsArray()` decorator
-- [ ] Nested DTOs use `@ValidateNested()` with `@Type()`
-
-## Incorrect (No Validation)
-
-```typescript
-// main.ts - Missing ValidationPipe 🚨
+// main.ts - Missing ValidationPipe
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   await app.listen(3000);  // No global pipe!
@@ -118,13 +28,13 @@ create(@Body() createUserDto: any) {
 
 // dto/create-user.dto.ts - No decorators
 export class CreateUserDto {
-  email: string;      // ❌ No validation
-  password: string;   // ❌ No validation
-  age: number;        // ❌ No validation
+  email: string;      // No validation
+  password: string;   // No validation
+  age: number;        // No validation
 }
 ```
 
-## Correct (Full Validation)
+**Correct:**
 
 ```typescript
 // main.ts - Global ValidationPipe

@@ -1,6 +1,54 @@
 [
   {
     "ruleId": "",
+    "ruleTitle": "Lazy Load Non-Critical Modules",
+    "type": "bad",
+    "code": "// app.module.ts\nimport { Module } from '@nestjs/common';\nimport { UsersModule } from './users/users.module';\nimport { AdminModule } from './admin/admin.module';\nimport { AnalyticsModule } from './analytics/analytics.module';\nimport { ReportsModule } from './reports/reports.module';\n\n@Module({\n  imports: [\n    CoreModule,\n    UsersModule,\n    AdminModule,      // 🚨 Always loads at startup\n    AnalyticsModule,  // 🚨 Always loads at startup\n    ReportsModule,    // 🚨 Always loads at startup\n  ],\n})\nexport class AppModule {}",
+    "language": "typescript",
+    "description": "Incorrect example for Lazy Load Non-Critical Modules"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Lazy Load Non-Critical Modules",
+    "type": "good",
+    "code": "# Application startup\n[AppModule] initialized\n[UsersModule] initialized\n\nStartup time: 0.5s\nMemory usage: 100MB\n\n# After first admin request\n[AdminModule] loaded\nMemory usage: 150MB (+50MB)\n\n# After first analytics request\n[AnalyticsModule] loaded\nMemory usage: 230MB (+80MB)",
+    "language": "bash",
+    "description": "Correct example for Lazy Load Non-Critical Modules"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use @nestjs/schedule for Cron Jobs and Scheduled Tasks",
+    "type": "bad",
+    "code": "// cleanup.service.ts - Raw timers 🚨\nimport { Injectable, OnModuleDestroy } from '@nestjs/common';\n\n@Injectable()\nexport class CleanupService implements OnModuleDestroy {\n  private intervals: NodeJS.Timeout[] = [];\n\n  constructor() {\n    // ❌ Raw interval - no NestJS lifecycle\n    const interval1 = setInterval(() => {\n      this.cleanupExpiredSessions().catch(console.error);\n    }, 60000);  // Every minute\n\n    // ❌ Another raw interval\n    const interval2 = setInterval(() => {\n      this.deleteOldLogs().catch(console.error);\n    }, 3600000);  // Every hour\n\n    // ❌ Manual interval tracking\n    this.intervals.push(interval1, interval2);\n  }\n\n  // ❌ Manual cleanup required\n  onModuleDestroy() {\n    this.intervals.forEach(clearInterval);\n  }\n\n  // ❌ No error handling in callbacks\n  async cleanupExpiredSessions() {\n    await this.prisma.session.deleteMany({\n      where: { expiresAt: { lt: new Date() } },\n    });\n  }\n\n  async deleteOldLogs() {\n    await this.prisma.log.deleteMany({\n      where: { createdAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },\n    });\n  }\n}\n\n// subscription.service.ts - Manual tracking 🚨\n@Injectable()\nexport class SubscriptionService {\n  private checkInterval: NodeJS.Timeout;\n\n  constructor(private prisma: PrismaService) {\n    // ❌ Manually start interval\n    this.startCheckingExpiringSubscriptions();\n  }\n\n  private startCheckingExpiringSubscriptions() {\n    this.checkInterval = setInterval(async () => {\n      try {\n        await this.checkExpiringSubscriptions();\n      } catch (error) {\n        console.error('Subscription check failed:', error);\n        // ❌ No structured logging\n      }\n    }, 24 * 60 * 60 * 1000);  // Daily\n  }\n\n  private async checkExpiringSubscriptions() {\n    // Business logic\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use @nestjs/schedule for Cron Jobs and Scheduled Tasks"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use @nestjs/schedule for Cron Jobs and Scheduled Tasks",
+    "type": "good",
+    "code": "// tasks/scheduled-tasks.service.spec.ts ✅\nimport { Test, TestingModule } from '@nestjs/testing';\nimport { ScheduledTasksService } from './scheduled-tasks.service';\nimport { SchedulerRegistry } from '@nestjs/schedule';\n\ndescribe('ScheduledTasksService', () => {\n  let service: ScheduledTasksService;\n  let schedulerRegistry: SchedulerRegistry;\n\n  beforeEach(async () => {\n    const module: TestingModule = await Test.createTestingModule({\n      providers: [\n        ScheduledTasksService,\n        {\n          provide: PrismaService,\n          useValue: { session: { deleteMany: jest.fn() } },\n        },\n        {\n          provide: SchedulerRegistry,\n          useValue: {\n            addCronJob: jest.fn(),\n            getCronJob: jest.fn(),\n            deleteCronJob: jest.fn(),\n          },\n        },\n      ],\n    }).compile();\n\n    service = module.get<ScheduledTasksService>(ScheduledTasksService);\n    schedulerRegistry = module.get<SchedulerRegistry>(SchedulerRegistry);\n  });\n\n  it('should be defined', () => {\n    expect(service).toBeDefined();\n  });\n\n  it('should cleanup expired sessions', async () => {\n    const deleteMany = jest.fn().mockResolvedValue({ count: 5 });\n    service['prisma'].session.deleteMany = deleteMany;\n\n    await service.cleanupExpiredSessions();\n\n    expect(deleteMany).toHaveBeenCalledWith({\n      where: { expiresAt: { lt: expect.any(Date) } },\n    });\n  });\n\n  it('should handle errors gracefully', async () => {\n    const loggerSpy = jest.spyOn(service['logger'], 'error');\n    jest.spyOn(service['prisma'].session, 'deleteMany').mockRejectedValue(\n      new Error('Database error')\n    );\n\n    await service.cleanupExpiredSessions();\n\n    expect(loggerSpy).toHaveBeenCalled();\n  });\n});",
+    "language": "typescript",
+    "description": "Correct example for Use @nestjs/schedule for Cron Jobs and Scheduled Tasks"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Cursor-Based Pagination for Large Datasets",
+    "type": "bad",
+    "code": "// dto/get-users.dto.ts - Offset pagination 🚨\nexport class GetUsersDto {\n  @IsInt()\n  @Min(1)\n  page: number = 1;\n\n  @IsInt()\n  @Min(1)\n  @Max(100)\n  limit: number = 20;\n}\n\n// users.controller.ts - Offset based 🚨\n@Controller('users')\nexport class UsersController {\n  @Get()\n  async findAll(@Query() dto: GetUsersDto) {\n    return this.usersService.findAll(dto);\n  }\n}\n\n// users.service.ts - OFFSET scans all rows 🚨\n@Injectable()\nexport class UsersService {\n  async findAll(dto: GetUsersDto) {\n    const { page, limit } = dto;\n    const skip = (page - 1) * limit;\n\n    // Page 1000: scans 19,980 rows just to return 20!\n    const [users, total] = await Promise.all([\n      this.prisma.user.findMany({\n        skip,  // ❌ Scans and discards rows\n        take: limit,\n        orderBy: { createdAt: 'desc' },\n      }),\n      this.prisma.user.count(),\n    ]);\n\n    return {\n      data: users,\n      meta: {\n        total,\n        page,\n        limit,\n        totalPages: Math.ceil(total / limit),\n      },\n    };\n  }\n}\n\n/* Performance issues:\n * Page 1:    ~1ms    (scans 0 rows)\n * Page 10:   ~5ms    (scans 180 rows)\n * Page 100:  ~50ms   (scans 1,980 rows)\n * Page 1000: ~500ms  (scans 19,980 rows)\n * Page 10000: ~5000ms (scans 199,980 rows)\n */",
+    "language": "typescript",
+    "description": "Incorrect example for Use Cursor-Based Pagination for Large Datasets"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Cursor-Based Pagination for Large Datasets",
+    "type": "good",
+    "code": "// components/UserInfiniteScroll.tsx\nimport { useEffect, useRef } from 'react';\nimport { useUsers } from '../hooks/useUsers';\n\nexport function UserInfiniteScroll() {\n  const { users, hasNextPage, loadNext } = useUsers();\n  const observerRef = useRef<IntersectionObserver>();\n\n  const lastUserRef = (node: HTMLLIElement) => {\n    if (observerRef.current) observerRef.current.disconnect();\n\n    observerRef.current = new IntersectionObserver((entries) => {\n      if (entries[0].isIntersecting && hasNextPage) {\n        loadNext();\n      }\n    });\n\n    if (node) observerRef.current.observe(node);\n  };\n\n  return (\n    <ul>\n      {users.map((user, index) => (\n        <li\n          key={user.id}\n          ref={index === users.length - 1 ? lastUserRef : undefined}\n        >\n          {user.name}\n        </li>\n      ))}\n    </ul>\n  );\n}",
+    "language": "tsx",
+    "description": "Correct example for Use Cursor-Based Pagination for Large Datasets"
+  },
+  {
+    "ruleId": "",
     "ruleTitle": "Generate Swagger/OpenAPI Documentation",
     "type": "bad",
     "code": "// users.controller.ts - Clients must guess schema 🚨\n@Controller('users')\nexport class UsersController {\n  @Post()\n  create(@Body() data: any) {\n    return this.usersService.create(data);\n  }\n}",
@@ -14,6 +62,38 @@
     "code": "// main.ts\nimport { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';\n\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  \n  const config = new DocumentBuilder()\n    .setTitle('Users API')\n    .setDescription('User management endpoints')\n    .setVersion('1.0')\n    .addBearerAuth()\n    .build();\n    \n  const document = SwaggerModule.createDocument(app, config);\n  SwaggerModule.setup('api/docs', app, document);  // ✅ Interactive docs\n  \n  await app.listen(3000);\n}\n\n// users.controller.ts\n@ApiTags('users')\n@ApiBearerAuth()\n@Controller('users')\nexport class UsersController {\n  @Post()\n  @ApiOperation({ summary: 'Create new user' })\n  @ApiResponse({ status: 201, description: 'User created', type: UserDto })\n  @ApiResponse({ status: 400, description: 'Invalid input' })\n  create(@Body() createUserDto: CreateUserDto) {\n    return this.usersService.create(createUserDto);\n  }\n}",
     "language": "typescript",
     "description": "auto-generated docs"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Event-Driven Architecture for Loose Coupling",
+    "type": "bad",
+    "code": "// users.service.ts - Tight coupling 🚨\n@Injectable()\nexport class UsersService {\n  constructor(\n    private prisma: PrismaService,\n    private emailService: EmailService,      // ❌ Direct dependency\n    private notificationService: NotificationService,  // ❌ Direct dependency\n    private profileService: ProfileService,   // ❌ Direct dependency\n    private auditService: AuditService,       // ❌ Direct dependency\n    private analyticsService: AnalyticsService,  // ❌ Direct dependency\n  ) {}\n\n  async register(data: RegisterDto) {\n    const user = await this.prisma.user.create({ data });\n\n    // ❌ Five dependencies just for side effects!\n    await this.emailService.sendVerification(user.email);\n    await this.notificationService.sendPush(user.id, 'Welcome!');\n    await this.profileService.createDefault(user.id);\n    await this.auditService.log('USER_REGISTERED', { userId: user.id });\n    await this.analyticsService.track('user_registered', { userId: user.id });\n\n    // ❌ Hard to test - need to mock all 5 services\n    // ❌ Hard to maintain - adding new feature requires modifying UsersService\n    // ❌ Errors cascade - if email fails, everything fails\n    // ❌ Hard to scale - all side effects are synchronous\n  }\n\n  async deleteUser(userId: string) {\n    await this.prisma.user.delete({ where: { id: userId } });\n\n    // ❌ Direct calls everywhere\n    await this.notificationService.clearUserNotifications(userId);\n    await this.profileService.delete(userId);\n    await this.analyticsService.deleteUserData(userId);\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Event-Driven Architecture for Loose Coupling"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Event-Driven Architecture for Loose Coupling",
+    "type": "good",
+    "code": "// users.service.spec.ts ✅\nimport { EventEmitter2 } from '@nestjs/event-emitter';\n\ndescribe('UsersService', () => {\n  let service: UsersService;\n  let eventEmitter: EventEmitter2;\n\n  beforeEach(async () => {\n    const module = await Test.createTestingModule({\n      providers: [\n        UsersService,\n        {\n          provide: PrismaService,\n          useValue: { user: { create: jest.fn() } },\n        },\n        {\n          provide: EventEmitter2,\n          useValue: { emit: jest.fn() },\n        },\n      ],\n    }).compile();\n\n    service = module.get(UsersService);\n    eventEmitter = module.get(EventEmitter2);\n  });\n\n  it('should emit user.registered event on registration', async () => {\n    const mockUser = { id: '1', email: 'test@example.com' };\n    jest.spyOn(service['prisma'].user, 'create').mockResolvedValue(mockUser);\n\n    await service.register({ email: 'test@example.com' });\n\n    expect(eventEmitter.emit).toHaveBeenCalledWith(\n      'user.registered',\n      expect.any(UserRegisteredEvent)\n    );\n  });\n});",
+    "language": "typescript",
+    "description": "Correct example for Use Event-Driven Architecture for Loose Coupling"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Organize Code by Feature Modules",
+    "type": "bad",
+    "code": "src/\n  users.controller.ts\n  users.service.ts\n  auth.controller.ts\n  auth.service.ts\n  products.controller.ts  // Chaos!\n  products.service.ts\n  orders.controller.ts\n  orders.service.ts",
+    "language": "typescript",
+    "description": "Incorrect example for Organize Code by Feature Modules"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Organize Code by Feature Modules",
+    "type": "good",
+    "code": "// orders/orders.service.ts\nimport { EventEmitter2 } from '@nestjs/event-emitter';\n\n@Injectable()\nexport class OrdersService {\n  constructor(private eventEmitter: EventEmitter2) {}\n\n  async createOrder(order: CreateOrderDto) {\n    const newOrder = await this.save(order);\n\n    // Emit event, don't directly call other services\n    this.eventEmitter.emit('order.created', { orderId: newOrder.id });\n\n    return newOrder;\n  }\n}\n\n// email/email.service.ts\nimport { OnEvent } from '@nestjs/event-emitter';\n\n@Injectable()\nexport class EmailService {\n  @OnEvent('order.created')\n  async sendOrderConfirmation(payload: { orderId: string }) {\n    await this.sendEmail({\n      to: 'customer@example.com',\n      subject: 'Order Confirmation',\n      body: `Order ${payload.orderId} received`,\n    });\n  }\n}",
+    "language": "typescript",
+    "description": "Correct example for Organize Code by Feature Modules"
   },
   {
     "ruleId": "",
@@ -65,19 +145,83 @@
   },
   {
     "ruleId": "",
+    "ruleTitle": "Single Responsibility - Separate Controller and Service",
+    "type": "bad",
+    "code": "@Controller('orders')\nexport class OrdersController {\n  constructor(private repository: OrdersRepository) {}\n\n  @Post()\n  async createOrder(@Body() data: any) {\n    // 🚨 Validation logic\n    if (!data.email || !this.isValidEmail(data.email)) {\n      throw new BadRequestException('Invalid email');\n    }\n\n    // 🚨 Business logic - checking inventory\n    const product = await this.repository.getProduct(data.productId);\n    if (product.stock < data.quantity) {\n      throw new BadRequestException('Insufficient stock');\n    }\n\n    // 🚨 Business logic - calculating discount\n    let discount = 0;\n    if (data.quantity > 10) {\n      discount = 0.1;\n    } else if (data.quantity > 5) {\n      discount = 0.05;\n    }\n\n    // 🚨 Business logic - calculating total\n    const subtotal = product.price * data.quantity;\n    const total = subtotal * (1 - discount);\n\n    // 🚨 Data access logic\n    const order = await this.repository.save({\n      productId: data.productId,\n      quantity: data.quantity,\n      total,\n    });\n\n    // 🚨 External service call\n    await this.emailService.sendConfirmation(data.email, order.id);\n\n    return order;\n  }\n\n  private isValidEmail(email: string): boolean {\n    return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Single Responsibility - Separate Controller and Service"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Single Responsibility - Separate Controller and Service",
+    "type": "good",
+    "code": "┌─────────────────────────────────────────────────────┐\n│                   Controller Layer                   │\n│  - Parse HTTP requests                               │\n│  - Validate with DTOs                                │\n│  - Set status codes and headers                      │\n│  - Delegate to services                              │\n└─────────────────────────────────────────────────────┘\n                         │\n                         ▼\n┌─────────────────────────────────────────────────────┐\n│                    Service Layer                     │\n│  - Execute business logic                            │\n│  - Enforce business rules                            │\n│  - Coordinate multiple repositories                  │\n│  - Emit domain events                                │\n└─────────────────────────────────────────────────────┘\n                         │\n                         ▼\n┌─────────────────────────────────────────────────────┐\n│                  Repository Layer                    │\n│  - Data access                                       │\n│  - Database queries                                  │\n│  - Entity persistence                                │\n└─────────────────────────────────────────────────────┘",
+    "language": "typescript",
+    "description": "Correct example for Single Responsibility - Separate Controller and Service"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Bun's Built-in Crypto for Secure Password Hashing",
+    "type": "bad",
+    "code": "// auth/auth.service.ts - Insecure 🚨\nimport { Injectable } from '@nestjs/common';\nimport { createHash, randomBytes } from 'crypto';\n\n@Injectable()\nexport class AuthService {\n  // ❌ Plain text storage\n  async register(email: string, password: string) {\n    return this.prisma.user.create({\n      data: { email, password },  // ❌ Stored as-is!\n    });\n  }\n\n  // ❌ Fast hash (SHA256, MD5) - crackable with GPUs\n  async hashPassword(password: string) {\n    return createHash('sha256').update(password).digest('hex');\n  }\n\n  // ❌ Manual salt - still vulnerable to GPU cracking\n  async hashWithSalt(password: string) {\n    const salt = randomBytes(16).toString('hex');\n    const hash = createHash('sha512')\n      .update(password + salt)\n      .digest('hex');\n    return `${salt}:${hash}`;\n  }\n\n  // ❌ Timing-sensitive string comparison\n  async verifyPassword(password: string, hash: string) {\n    const [salt, originalHash] = hash.split(':');\n    const computedHash = createHash('sha512')\n      .update(password + salt)\n      .digest('hex');\n    return computedHash === originalHash;  // ❌ Timing attack vulnerable\n  }\n\n  // ❌ Weak password requirements\n  @MinLength(6)  // ❌ Too short!\n  password: string;\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Bun's Built-in Crypto for Secure Password Hashing"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Bun's Built-in Crypto for Secure Password Hashing",
+    "type": "good",
+    "code": "// ✅ Recommended for new applications\nasync hash(password: string) {\n  return Bun.password.hash(password);  // Uses argon2id by default\n}\n\n// Or explicitly\nasync hash(password: string) {\n  return Bun.password.hash(password, {\n    algorithm: 'argon2id',\n    memoryCost: 16,  // MB of memory (higher = more GPU-resistant)\n    timeCost: 2,     // Number of iterations\n  });\n}",
+    "language": "typescript",
+    "description": "Correct example for Use Bun's Built-in Crypto for Secure Password Hashing"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Guards for Route Protection",
+    "type": "bad",
+    "code": "// users.controller.ts - All routes exposed 🚨\n@Controller('users')\nexport class UsersController {\n  @Get()\n  findAll() {\n    return this.usersService.findAll();  // 🚨 Publicly accessible!\n  }\n\n  @Get(':id')\n  findOne(@Param('id') id: string) {\n    return this.usersService.findOne(id);  // 🚨 Anyone can view any user!\n  }\n\n  @Delete(':id')\n  remove(@Param('id') id: string) {\n    return this.usersService.remove(id);  // 🚨 Anyone can delete users!\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Use Guards for Route Protection"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Use Guards for Route Protection",
+    "type": "good",
+    "code": "// First install: bun add @nestjs/throttler\n\n// app.module.ts\nimport { ThrottlerModule } from '@nestjs/throttler';\n\n@Module({\n  imports: [\n    ThrottlerModule.forRoot([{\n      ttl: 60000,      // 1 minute\n      limit: 5,        // 5 requests per minute\n    }]),\n  ],\n})\nexport class AppModule {}\n\n// auth/auth.controller.ts\nimport { Throttle } from '@nestjs/throttler';\n\n@Controller('auth')\nexport class AuthController {\n  @Post('login')\n  @Throttle({ default: { limit: 5, ttl: 60000 } })  // ✅ Stricter for login\n  login(@Body() dto: LoginDto) {\n    return this.authService.login(dto);\n  }\n\n  @Post('register')\n  @Throttle({ default: { limit: 3, ttl: 3600000 } })  // ✅ 3 per hour\n  register(@Body() dto: RegisterDto) {\n    return this.authService.register(dto);\n  }\n}",
+    "language": "typescript",
+    "description": "Correct example for Use Guards for Route Protection"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Never Hardcode Secrets - Use Environment Variables",
+    "type": "bad",
+    "code": "// database.module.ts\nTypeOrmModule.forRoot({\n  url: 'postgres://user:password@localhost/db',  // 🚨 Exposed!\n  ssl: {\n    cert: process.env.DB_CERT,  // Still vulnerable if cert is committed\n  },\n})\n\n// auth.service.ts\n@Injectable()\nexport class AuthService {\n  private readonly jwtSecret = 'my-super-secret-key-12345';  // 🚨 Exposed!\n  private readonly apiKey = 'sk_test_abc123xyz';  // 🚨 Exposed!\n}\n\n// payment.controller.ts\nconst stripe = require('stripe')('sk_test_51ABC...');  // 🚨 Exposed!",
+    "language": "typescript",
+    "description": "Incorrect example for Never Hardcode Secrets - Use Environment Variables"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Never Hardcode Secrets - Use Environment Variables",
+    "type": "good",
+    "code": "// For production, ignore .env files and use process.env only\nConfigModule.forRoot({\n  isGlobal: true,\n  ignoreEnvFile: process.env.NODE_ENV === 'production',\n  validationSchema: productionValidationSchema,\n})",
+    "language": "typescript",
+    "description": "Correct example for Never Hardcode Secrets - Use Environment Variables"
+  },
+  {
+    "ruleId": "",
     "ruleTitle": "Use Parameterized Queries to Prevent SQL Injection",
     "type": "bad",
-    "code": "// Raw SQL concatenation - DANGEROUS 🚨\nconst userId = req.params.id;\nconst query = `SELECT * FROM users WHERE name = '${userId}'`; \nawait prisma.$executeRaw(query);",
+    "code": "// users.service.ts - DANGEROUS 🚨\n\nimport { Injectable } from '@nestjs/common';\nimport { PrismaService } from './prisma.service';\n\n@Injectable()\nexport class UsersService {\n  constructor(private prisma: PrismaService) {}\n\n  // ❌ String concatenation - SQL INJECTION\n  async findByName(name: string) {\n    const query = `SELECT * FROM users WHERE name = '${name}'`;\n    return this.prisma.$queryRawUnsafe(query);\n  }\n\n  // ❌ Template literal concatenation - VULNERABLE\n  async findByEmailAndPassword(email: string, password: string) {\n    const query = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;\n    return this.prisma.$executeRawUnsafe(query);\n  }\n\n  // ❌ Direct interpolation - VULNERABLE\n  async searchUsers(searchTerm: string) {\n    return this.prisma.$queryRaw(\n      `SELECT * FROM users WHERE name LIKE '%${searchTerm}%'`\n    );\n  }\n\n  // ❌ Old Prisma syntax (pre-v7)\n  async oldTransactionPattern(userData: any, postData: any) {\n    return this.prisma.$transaction([\n      this.prisma.user.create({ data: userData }),\n      this.prisma.post.create({ data: postData }),\n    ]);\n  }\n}",
     "language": "typescript",
-    "description": "SQL injection vulnerable"
+    "description": "Incorrect example for Use Parameterized Queries to Prevent SQL Injection"
   },
   {
     "ruleId": "",
     "ruleTitle": "Use Parameterized Queries to Prevent SQL Injection",
     "type": "good",
-    "code": "// Prisma ORM - Safe ✅\nconst user = await prisma.user.findUnique({\n  where: { id: userId }\n});\n\n// Prisma raw with parameters\nconst users = await prisma.$queryRaw`\n  SELECT * FROM users \n  WHERE email = ${email} AND status = ${status}\n`;\n\n// Or with positional params\nconst results = await prisma.$queryRaw`\n  SELECT * FROM users WHERE id = $1\n`, userId;",
+    "code": "// Extended client with custom methods\nconst prisma = new PrismaClient().$extends({\n  model: {\n    user: {\n      async findByEmail(email: string) {\n        return prisma.user.findUnique({ where: { email } });\n      },\n      async findActive() {\n        return prisma.user.findMany({ where: { status: 'ACTIVE' } });\n      },\n    },\n    order: {\n      async calculateTotal(orderId: string) {\n        const items = await prisma.orderItem.findMany({\n          where: { orderId },\n        });\n        return items.reduce((sum, item) => sum + item.price * item.quantity, 0);\n      },\n    },\n  },\n});\n\n// Usage\nconst user = await prisma.user.findByEmail('user@example.com');\nconst total = await prisma.order.calculateTotal('order-123');",
     "language": "typescript",
-    "description": "Prisma safe queries"
+    "description": "Correct example for Use Parameterized Queries to Prevent SQL Injection"
   },
   {
     "ruleId": "",
@@ -94,6 +238,22 @@
     "code": "// health.controller.ts\n@Controller('health')\nexport class HealthController {\n  constructor(\n    @Inject(PrismaService) private prisma: PrismaService,\n    @Inject(CacheService) private cache: CacheService,\n  ) {}\n\n  @Get()\n  async checkHealth() {\n    // Database check\n    await this.prisma.$queryRaw`SELECT 1`;\n    \n    // Cache check\n    await this.cache.get('health-check');\n    \n    return {\n      status: 'healthy',\n      timestamp: new Date().toISOString(),\n      services: { database: 'ok', cache: 'ok' }\n    };\n  }\n}\n\n// main.ts\napp.setGlobalPrefix('api');\napp.use('/api/health', healthRouter);",
     "language": "typescript",
     "description": "comprehensive health checks"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Enable Global Exception Filter",
+    "type": "bad",
+    "code": "// main.ts\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  await app.listen(3000);\n}\n\n// Service throws raw errors\n@Injectable()\nexport class UsersService {\n  async findOne(id: string) {\n    const user = await this.repository.findOne(id);\n    if (!user) {\n      // 🚨 Throws raw Error - leaks database info\n      throw new Error(`User ${id} not found in database`);\n    }\n    return user;\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Enable Global Exception Filter"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Enable Global Exception Filter",
+    "type": "good",
+    "code": "// common/filters/all-exceptions.filter.ts\nimport { LoggerService } from '../services/logger.service';\n\n@Catch()\nexport class AllExceptionsFilter implements ExceptionFilter {\n  constructor(\n    private configService: ConfigService,\n    private loggerService: LoggerService,\n  ) {}\n\n  catch(exception: unknown, host: ArgumentsHost) {\n    const ctx = host.switchToHttp();\n    const response = ctx.getResponse();\n    const request = ctx.getResponse();\n\n    const status =\n      exception instanceof HttpException\n        ? exception.getStatus()\n        : HttpStatus.INTERNAL_SERVER_ERROR;\n\n    // ✅ Log to external service (Sentry, DataDog, etc.)\n    this.loggerService.logError({\n      status,\n      path: request.url,\n      method: request.method,\n      exception,\n      userId: request.user?.id,\n      correlationId: request.headers['x-correlation-id'],\n    });\n\n    const errorResponse = this.buildErrorResponse(exception, request);\n    response.status(status).json(errorResponse);\n  }\n}",
+    "language": "typescript",
+    "description": "Correct example for Enable Global Exception Filter"
   },
   {
     "ruleId": "",
@@ -230,5 +390,37 @@
     "code": "// users.service.spec.ts\ndescribe('UsersService', () => {\n  let service: UsersService;\n  let prisma: PrismaService;\n\n  beforeEach(async () => {\n    const module = await Test.createTestingModule({\n      providers: [UsersService, { provide: PrismaService, useValue: mockPrisma }],\n    }).compile();\n    service = module.get(UsersService);\n  });\n\n  it('should create user successfully', async () => {\n    const dto: CreateUserDto = { email: 'test@example.com', name: 'Test' };\n    const mockUser = { id: '1', ...dto };\n\n    jest.spyOn(prisma.user, 'create').mockResolvedValue(mockUser);\n\n    const result = await service.createUser(dto);\n    expect(result).toEqual(mockUser);\n    expect(prisma.user.create).toHaveBeenCalledWith(expect.any(Object));\n  });\n});",
     "language": "typescript",
     "description": "full test suite"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Create Custom Pipes for Query Parameter Transformation",
+    "type": "bad",
+    "code": "// users.controller.ts - Manual type conversion 🚨\n@Controller('users')\nexport class UsersController {\n  @Get()\n  async findAll(@Query() query: any) {\n    // ❌ Manual parsing - error-prone\n    const page = parseInt(query.page as string, 10) || 1;\n    const limit = parseInt(query.limit as string, 10) || 10;\n\n    // ❌ Manual boolean conversion\n    const active = query.active === 'true' || query.active === '1';\n\n    // ❌ Manual trimming\n    const search = query.search ? (query.search as string).trim() : undefined;\n\n    // ❌ No validation - NaN possible\n    if (isNaN(page) || isNaN(limit)) {\n      throw new BadRequestException('Invalid page or limit');\n    }\n\n    return this.usersService.findAll({ page, limit, active, search });\n  }\n\n  @Get(':id')\n  async findOne(@Param('id') id: string) {\n    // ❌ Manual integer conversion\n    const userId = parseInt(id, 10);\n    if (isNaN(userId)) {\n      throw new BadRequestException('Invalid user ID');\n    }\n    return this.usersService.findOne(userId);\n  }\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Create Custom Pipes for Query Parameter Transformation"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Create Custom Pipes for Query Parameter Transformation",
+    "type": "good",
+    "code": "// common/pipes/parse-int.pipe.spec.ts ✅\nimport { ParseIntPipe } from './parse-int.pipe';\nimport { BadRequestException } from '@nestjs/common';\n\ndescribe('ParseIntPipe', () => {\n  let pipe: ParseIntPipe;\n\n  beforeEach(() => {\n    pipe = new ParseIntPipe();\n  });\n\n  it('should parse valid integer string', () => {\n    const result = pipe.transform('42', { type: 'query', data: 'page' } as any);\n    expect(result).toBe(42);\n  });\n\n  it('should throw for invalid string', () => {\n    expect(() => pipe.transform('abc', { type: 'query', data: 'page' } as any))\n      .toThrow(BadRequestException);\n  });\n\n  it('should return undefined for optional empty value', () => {\n    const optionalPipe = new ParseIntPipe({ optional: true });\n    const result = optionalPipe.transform('', { type: 'query', data: 'page' } as any);\n    expect(result).toBeUndefined();\n  });\n\n  it('should enforce min value', () => {\n    const pipeWithMin = new ParseIntPipe({ minValue: 1 });\n    expect(() => pipeWithMin.transform('0', { type: 'query', data: 'page' } as any))\n      .toThrow(BadRequestException);\n  });\n\n  it('should enforce max value', () => {\n    const pipeWithMax = new ParseIntPipe({ maxValue: 100 });\n    expect(() => pipeWithMax.transform('101', { type: 'query', data: 'page' } as any))\n      .toThrow(BadRequestException);\n  });\n});",
+    "language": "typescript",
+    "description": "Correct example for Create Custom Pipes for Query Parameter Transformation"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Validate All Inputs with DTOs and ValidationPipe",
+    "type": "bad",
+    "code": "// main.ts - Missing ValidationPipe\nasync function bootstrap() {\n  const app = await NestFactory.create(AppModule);\n  await app.listen(3000);  // No global pipe!\n}\n\n// users.controller.ts - No validation\n@Post()\ncreate(@Body() createUserDto: any) {\n  // Any data can be passed - vulnerable!\n  return this.usersService.create(createUserDto);\n}\n\n// dto/create-user.dto.ts - No decorators\nexport class CreateUserDto {\n  email: string;      // No validation\n  password: string;   // No validation\n  age: number;        // No validation\n}",
+    "language": "typescript",
+    "description": "Incorrect example for Validate All Inputs with DTOs and ValidationPipe"
+  },
+  {
+    "ruleId": "",
+    "ruleTitle": "Validate All Inputs with DTOs and ValidationPipe",
+    "type": "good",
+    "code": "{\n  \"statusCode\": 400,\n  \"message\": [\n    \"email must be an email\",\n    \"password must be longer than or equal to 8 characters\",\n    \"password must contain uppercase, lowercase, and number\",\n    \"age must not be less than 18\"\n  ],\n  \"error\": \"Bad Request\"\n}",
+    "language": "json",
+    "description": "Correct example for Validate All Inputs with DTOs and ValidationPipe"
   }
 ]

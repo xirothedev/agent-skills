@@ -361,6 +361,56 @@ Flat controller/service structure becomes unmaintainable at scale. NestJS module
 
 > **Hint**: Use feature modules to encapsulate related controllers, services, and providers. Each module should be independently testable and reusable across the application.
 
+**Incorrect:**
+
+```typescript
+src/
+  users.controller.ts
+  users.service.ts
+  auth.controller.ts
+  auth.service.ts
+  products.controller.ts  // Chaos!
+  products.service.ts
+  orders.controller.ts
+  orders.service.ts
+```
+
+**Correct:**
+
+```typescript
+// orders/orders.service.ts
+import { EventEmitter2 } from '@nestjs/event-emitter';
+
+@Injectable()
+export class OrdersService {
+  constructor(private eventEmitter: EventEmitter2) {}
+
+  async createOrder(order: CreateOrderDto) {
+    const newOrder = await this.save(order);
+
+    // Emit event, don't directly call other services
+    this.eventEmitter.emit('order.created', { orderId: newOrder.id });
+
+    return newOrder;
+  }
+}
+
+// email/email.service.ts
+import { OnEvent } from '@nestjs/event-emitter';
+
+@Injectable()
+export class EmailService {
+  @OnEvent('order.created')
+  async sendOrderConfirmation(payload: { orderId: string }) {
+    await this.sendEmail({
+      to: 'customer@example.com',
+      subject: 'Order Confirmation',
+      body: `Order ${payload.orderId} received`,
+    });
+  }
+}
+```
+
 Services can be shared across multiple modules by exporting them:
 
 Use `@Global()` for modules that should be available everywhere without importing:
@@ -434,10 +484,6 @@ Dead code bloats the project and confuses developers. Unused dependencies increa
 
 **Impact: HIGH (Makes testing and maintenance easier)**
 
-Fat controllers mix HTTP concerns with business logic, making unit testing impossible. Controllers should only parse HTTP requests and delegate. **Controllers are thin, services are smart.**
-
-> **Hint**: Controllers handle HTTP-specific concerns (validation, parsing, status codes). Services handle business logic (calculations, workflows, data transformations). This separation makes both layers independently testable.
-
 | Controllers (HTTP Layer) | Services (Business Layer) |
 
 |--------------------------|---------------------------|
@@ -454,7 +500,68 @@ Fat controllers mix HTTP concerns with business logic, making unit testing impos
 
 | Upload/download files | Enforce business rules |
 
+**Incorrect:**
+
+```typescript
+@Controller('orders')
+export class OrdersController {
+  constructor(private repository: OrdersRepository) {}
+
+  @Post()
+  async createOrder(@Body() data: any) {
+    // 🚨 Validation logic
+    if (!data.email || !this.isValidEmail(data.email)) {
+      throw new BadRequestException('Invalid email');
+    }
+
+    // 🚨 Business logic - checking inventory
+    const product = await this.repository.getProduct(data.productId);
+    if (product.stock < data.quantity) {
+      throw new BadRequestException('Insufficient stock');
+    }
+
+    // 🚨 Business logic - calculating discount
+    let discount = 0;
+    if (data.quantity > 10) {
+      discount = 0.1;
+    } else if (data.quantity > 5) {
+      discount = 0.05;
+    }
+
+    // 🚨 Business logic - calculating total
+    const subtotal = product.price * data.quantity;
+    const total = subtotal * (1 - discount);
+
+    // 🚨 Data access logic
+    const order = await this.repository.save({
+      productId: data.productId,
+      quantity: data.quantity,
+      total,
+    });
+
+    // 🚨 External service call
+    await this.emailService.sendConfirmation(data.email, order.id);
+
+    return order;
+  }
+
+  private isValidEmail(email: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+}
+```
+
 **Problems:**
+
+- Cannot test business logic without HTTP context
+
+- Cannot reuse business logic in other contexts (CLI, GraphQL, WebSocket)
+
+- Difficult to mock dependencies for testing
+
+- Changes to business logic require HTTP layer changes
+
+**Correct:**
 
 ```typescript
 ┌─────────────────────────────────────────────────────┐
@@ -482,14 +589,6 @@ Fat controllers mix HTTP concerns with business logic, making unit testing impos
 │  - Entity persistence                                │
 └─────────────────────────────────────────────────────┘
 ```
-
-- Cannot test business logic without HTTP context
-
-- Cannot reuse business logic in other contexts (CLI, GraphQL, WebSocket)
-
-- Difficult to mock dependencies for testing
-
-- Changes to business logic require HTTP layer changes
 
 Controllers SHOULD handle HTTP-specific details:
 
@@ -533,10 +632,6 @@ getUserProfile()       // camelCase method ✅
 
 **Impact: HIGH (Reduces dependencies and enables scalability)**
 
-Direct service-to-service coupling creates rigid dependencies that are hard to test and maintain. Event-driven architecture uses domain events to decouple modules, allowing them to communicate without knowing about each other. **Never inject services directly just to trigger side effects.**
-
-> **Hint**: When a user registers, you need to send a welcome email, create a profile, and log an audit event. Instead of injecting `EmailService`, `ProfileService`, and `AuditService` into `UsersService`, emit a `UserRegistered` event and let each service handle it independently.
-
 When implementing or reviewing cross-module communication, **always** follow these steps:
 
 **Pattern to check:** Look for multiple service dependencies that trigger side effects.
@@ -544,6 +639,80 @@ When implementing or reviewing cross-module communication, **always** follow the
 **If found:** Replace with event emission using EventEmitter2.
 
 **Run in terminal:**
+
+```bash
+bun add @nestjs/event-emitter
+```
+
+**File:** `src/app.module.ts`
+
+**File:** `src/users/events/user-registered.event.ts`
+
+**File:** `src/users/users.service.ts`
+
+**File:** `src/email/listeners/user.listener.ts`
+
+**File:** `src/email/email.module.ts`
+
+Use this checklist when reviewing or creating cross-module communication:
+
+- [ ] Services don't inject other services just for side effects
+
+- [ ] EventEmitter2 is configured in `app.module.ts`
+
+- [ ] Events are defined as separate classes with types
+
+- [ ] Events are emitted using `eventEmitter.emit()`
+
+- [ ] Event listeners use `@OnEvent()` decorator
+
+- [ ] Listeners are registered in their respective modules
+
+- [ ] Event names use consistent naming convention (e.g., `module.action`)
+
+**Incorrect:**
+
+```typescript
+// users.service.ts - Tight coupling 🚨
+@Injectable()
+export class UsersService {
+  constructor(
+    private prisma: PrismaService,
+    private emailService: EmailService,      // ❌ Direct dependency
+    private notificationService: NotificationService,  // ❌ Direct dependency
+    private profileService: ProfileService,   // ❌ Direct dependency
+    private auditService: AuditService,       // ❌ Direct dependency
+    private analyticsService: AnalyticsService,  // ❌ Direct dependency
+  ) {}
+
+  async register(data: RegisterDto) {
+    const user = await this.prisma.user.create({ data });
+
+    // ❌ Five dependencies just for side effects!
+    await this.emailService.sendVerification(user.email);
+    await this.notificationService.sendPush(user.id, 'Welcome!');
+    await this.profileService.createDefault(user.id);
+    await this.auditService.log('USER_REGISTERED', { userId: user.id });
+    await this.analyticsService.track('user_registered', { userId: user.id });
+
+    // ❌ Hard to test - need to mock all 5 services
+    // ❌ Hard to maintain - adding new feature requires modifying UsersService
+    // ❌ Errors cascade - if email fails, everything fails
+    // ❌ Hard to scale - all side effects are synchronous
+  }
+
+  async deleteUser(userId: string) {
+    await this.prisma.user.delete({ where: { id: userId } });
+
+    // ❌ Direct calls everywhere
+    await this.notificationService.clearUserNotifications(userId);
+    await this.profileService.delete(userId);
+    await this.analyticsService.deleteUserData(userId);
+  }
+}
+```
+
+**Correct:**
 
 ```typescript
 // users.service.spec.ts ✅
@@ -585,32 +754,6 @@ describe('UsersService', () => {
   });
 });
 ```
-
-**File:** `src/app.module.ts`
-
-**File:** `src/users/events/user-registered.event.ts`
-
-**File:** `src/users/users.service.ts`
-
-**File:** `src/email/listeners/user.listener.ts`
-
-**File:** `src/email/email.module.ts`
-
-Use this checklist when reviewing or creating cross-module communication:
-
-- [ ] Services don't inject other services just for side effects
-
-- [ ] EventEmitter2 is configured in `app.module.ts`
-
-- [ ] Events are defined as separate classes with types
-
-- [ ] Events are emitted using `eventEmitter.emit()`
-
-- [ ] Event listeners use `@OnEvent()` decorator
-
-- [ ] Listeners are registered in their respective modules
-
-- [ ] Event names use consistent naming convention (e.g., `module.action`)
 
 | Practice | Why |
 
@@ -664,6 +807,42 @@ Default Express errors leak stack traces and database info to clients. Global fi
 ```
 
 **With global filters:**
+
+```json
+// ✅ Production response - Safe!
+{
+  "statusCode": 500,
+  "message": "Internal server error",
+  "error": "INTERNAL_SERVER_ERROR",
+  "timestamp": "2026-01-20T12:34:56.789Z",
+  "path": "/api/users/123"
+}
+```
+
+**Incorrect:**
+
+```typescript
+// main.ts
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+
+// Service throws raw errors
+@Injectable()
+export class UsersService {
+  async findOne(id: string) {
+    const user = await this.repository.findOne(id);
+    if (!user) {
+      // 🚨 Throws raw Error - leaks database info
+      throw new Error(`User ${id} not found in database`);
+    }
+    return user;
+  }
+}
+```
+
+**Correct:**
 
 ```typescript
 // common/filters/all-exceptions.filter.ts
@@ -817,10 +996,6 @@ export class UsersService {
 
 **Impact: MEDIUM (Ensures type safety and reduces boilerplate)**
 
-Query parameters are always strings by default. Custom pipes automatically transform and validate these values before they reach your controller, providing type safety and reducing boilerplate code. **Never manually parse query parameters in controllers.**
-
-> **Hint**: NestJS pipes are executed before controllers. Use them to transform `?page=1` into `number: 1`, `?active=true` into `boolean: true`, and trim whitespace from strings automatically.
-
 When implementing or reviewing query parameter handling, **always** follow these steps:
 
 **Pattern to check:** Look for `parseInt()`, `Number()`, `Boolean()`, or string operations in controllers.
@@ -848,6 +1023,88 @@ Use this checklist when reviewing or creating query parameter handling:
 - [ ] Optional params use `optional: true` pipe option
 
 - [ ] Error messages from pipes are user-friendly
+
+**Incorrect:**
+
+```typescript
+// users.controller.ts - Manual type conversion 🚨
+@Controller('users')
+export class UsersController {
+  @Get()
+  async findAll(@Query() query: any) {
+    // ❌ Manual parsing - error-prone
+    const page = parseInt(query.page as string, 10) || 1;
+    const limit = parseInt(query.limit as string, 10) || 10;
+
+    // ❌ Manual boolean conversion
+    const active = query.active === 'true' || query.active === '1';
+
+    // ❌ Manual trimming
+    const search = query.search ? (query.search as string).trim() : undefined;
+
+    // ❌ No validation - NaN possible
+    if (isNaN(page) || isNaN(limit)) {
+      throw new BadRequestException('Invalid page or limit');
+    }
+
+    return this.usersService.findAll({ page, limit, active, search });
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    // ❌ Manual integer conversion
+    const userId = parseInt(id, 10);
+    if (isNaN(userId)) {
+      throw new BadRequestException('Invalid user ID');
+    }
+    return this.usersService.findOne(userId);
+  }
+}
+```
+
+**Correct:**
+
+```typescript
+// common/pipes/parse-int.pipe.spec.ts ✅
+import { ParseIntPipe } from './parse-int.pipe';
+import { BadRequestException } from '@nestjs/common';
+
+describe('ParseIntPipe', () => {
+  let pipe: ParseIntPipe;
+
+  beforeEach(() => {
+    pipe = new ParseIntPipe();
+  });
+
+  it('should parse valid integer string', () => {
+    const result = pipe.transform('42', { type: 'query', data: 'page' } as any);
+    expect(result).toBe(42);
+  });
+
+  it('should throw for invalid string', () => {
+    expect(() => pipe.transform('abc', { type: 'query', data: 'page' } as any))
+      .toThrow(BadRequestException);
+  });
+
+  it('should return undefined for optional empty value', () => {
+    const optionalPipe = new ParseIntPipe({ optional: true });
+    const result = optionalPipe.transform('', { type: 'query', data: 'page' } as any);
+    expect(result).toBeUndefined();
+  });
+
+  it('should enforce min value', () => {
+    const pipeWithMin = new ParseIntPipe({ minValue: 1 });
+    expect(() => pipeWithMin.transform('0', { type: 'query', data: 'page' } as any))
+      .toThrow(BadRequestException);
+  });
+
+  it('should enforce max value', () => {
+    const pipeWithMax = new ParseIntPipe({ maxValue: 100 });
+    expect(() => pipeWithMax.transform('101', { type: 'query', data: 'page' } as any))
+      .toThrow(BadRequestException);
+  });
+});
+```
 
 | Practice | Why |
 
@@ -879,37 +1136,44 @@ Use this checklist when reviewing or creating query parameter handling:
 
 Unvalidated inputs lead to runtime errors, SQL injection, and security vulnerabilities. Global ValidationPipe ensures every DTO is validated before reaching controllers. **Never trust client data.**
 
-> **Hint**: Apply ValidationPipe globally in `main.ts` to ensure all routes are protected. Use `transform: true` to automatically convert plain objects to DTO class instances.
+**Incorrect:**
 
-When implementing or reviewing code, **always** follow these steps:
+```typescript
+// main.ts - Missing ValidationPipe
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);  // No global pipe!
+}
 
-**File:** `src/main.ts`
+// users.controller.ts - No validation
+@Post()
+create(@Body() createUserDto: any) {
+  // Any data can be passed - vulnerable!
+  return this.usersService.create(createUserDto);
+}
 
-**If missing:** Add the ValidationPipe setup before `app.listen()`.
+// dto/create-user.dto.ts - No decorators
+export class CreateUserDto {
+  email: string;      // No validation
+  password: string;   // No validation
+  age: number;        // No validation
+}
+```
 
-**Check pattern:** Controllers should NOT use `any` type for request bodies.
+**Correct:**
 
-**Check pattern:** All DTO properties must have decorators from `class-validator`.
-
-**Check pattern:** Use `@Type()` for non-string types from query params.
-
-Use this checklist when reviewing or creating endpoints:
-
-- [ ] Global ValidationPipe configured in `main.ts`
-
-- [ ] All controller methods use typed DTOs (not `any`)
-
-- [ ] All DTO properties have validation decorators
-
-- [ ] Query params use `@Type()` decorator for number/boolean/date
-
-- [ ] Optional fields use `@IsOptional()`
-
-- [ ] Enums use `@IsEnum()` decorator
-
-- [ ] Arrays use `@IsArray()` decorator
-
-- [ ] Nested DTOs use `@ValidateNested()` with `@Type()`
+```json
+{
+  "statusCode": 400,
+  "message": [
+    "email must be an email",
+    "password must be longer than or equal to 8 characters",
+    "password must contain uppercase, lowercase, and number",
+    "age must not be less than 18"
+  ],
+  "error": "Bad Request"
+}
+```
 
 | Option | What It Does | Always Use? |
 
@@ -945,10 +1209,6 @@ For business-specific validation rules:
 
 **Impact: CRITICAL (Eliminates SQL injection vulnerabilities)**
 
-Raw SQL queries with string concatenation allow attackers to inject malicious code. Prisma Client automatically parameterizes all queries, preventing injection. **Never use string concatenation with user input.**
-
-> **Hint**: Prisma v7 introduces the new `sql` template tag for raw queries. Always use tagged template literals instead of string concatenation. Prisma automatically parameterizes all variables passed to template tags.
-
 When implementing or reviewing database queries, **always** follow these steps:
 
 **Pattern to check:** Look for `$queryRaw`, `$executeRaw`, or `sql` template tag usage.
@@ -958,6 +1218,72 @@ When implementing or reviewing database queries, **always** follow these steps:
 **File:** Any service using Prisma
 
 **Prisma v7 transaction pattern:**
+
+```bash
+bun add @prisma/client @prisma/adapter-pg
+bun add -D prisma
+```
+
+**File:** `src/database/prisma.service.ts` or similar
+
+Use this checklist when reviewing or creating database queries:
+
+- [ ] No string concatenation in SQL queries
+
+- [ ] All `$queryRaw` uses template literals with variables
+
+- [ ] All `$executeRaw` uses template literals with variables
+
+- [ ] Prisma v7 `sql` template tag imported when needed
+
+- [ ] Transactions use async callback pattern
+
+- [ ] Client extensions use `$extends()` method
+
+- [ ] User input never interpolated directly into SQL
+
+**Incorrect:**
+
+```typescript
+// users.service.ts - DANGEROUS 🚨
+
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+
+@Injectable()
+export class UsersService {
+  constructor(private prisma: PrismaService) {}
+
+  // ❌ String concatenation - SQL INJECTION
+  async findByName(name: string) {
+    const query = `SELECT * FROM users WHERE name = '${name}'`;
+    return this.prisma.$queryRawUnsafe(query);
+  }
+
+  // ❌ Template literal concatenation - VULNERABLE
+  async findByEmailAndPassword(email: string, password: string) {
+    const query = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;
+    return this.prisma.$executeRawUnsafe(query);
+  }
+
+  // ❌ Direct interpolation - VULNERABLE
+  async searchUsers(searchTerm: string) {
+    return this.prisma.$queryRaw(
+      `SELECT * FROM users WHERE name LIKE '%${searchTerm}%'`
+    );
+  }
+
+  // ❌ Old Prisma syntax (pre-v7)
+  async oldTransactionPattern(userData: any, postData: any) {
+    return this.prisma.$transaction([
+      this.prisma.user.create({ data: userData }),
+      this.prisma.post.create({ data: postData }),
+    ]);
+  }
+}
+```
+
+**Correct:**
 
 ```typescript
 // Extended client with custom methods
@@ -986,24 +1312,6 @@ const prisma = new PrismaClient().$extends({
 const user = await prisma.user.findByEmail('user@example.com');
 const total = await prisma.order.calculateTotal('order-123');
 ```
-
-**File:** `src/database/prisma.service.ts` or similar
-
-Use this checklist when reviewing or creating database queries:
-
-- [ ] No string concatenation in SQL queries
-
-- [ ] All `$queryRaw` uses template literals with variables
-
-- [ ] All `$executeRaw` uses template literals with variables
-
-- [ ] Prisma v7 `sql` template tag imported when needed
-
-- [ ] Transactions use async callback pattern
-
-- [ ] Client extensions use `$extends()` method
-
-- [ ] User input never interpolated directly into SQL
 
 | Practice | Why |
 
@@ -1041,10 +1349,6 @@ Use this checklist when reviewing or creating database queries:
 
 **Impact: CRITICAL (Prevents password leak breaches)**
 
-Storing passwords in plain text is a critical security vulnerability. When a database is compromised, plain text passwords expose users to credential stuffing and account takeover across all services where they reuse passwords. **Never store plain text passwords or use weak hashing.**
-
-> **Hint**: Bun provides a built-in `Crypto` module with secure password hashing supporting both **argon2** (default) and **bcrypt** algorithms. The algorithm is configurable at runtime via `algorithm: 'argon2id' | 'bcrypt'` option. No external packages needed.
-
 When implementing or reviewing password handling, **always** follow these steps:
 
 **Pattern to check:** Look for passwords being stored directly or hashed with weak algorithms.
@@ -1070,6 +1374,69 @@ Use this checklist when reviewing or creating password handling:
 - [ ] Database column for hashed password is `TEXT` or `VARCHAR(255)`
 
 - [ ] Error messages don't reveal if user exists
+
+**Incorrect:**
+
+```typescript
+// auth/auth.service.ts - Insecure 🚨
+import { Injectable } from '@nestjs/common';
+import { createHash, randomBytes } from 'crypto';
+
+@Injectable()
+export class AuthService {
+  // ❌ Plain text storage
+  async register(email: string, password: string) {
+    return this.prisma.user.create({
+      data: { email, password },  // ❌ Stored as-is!
+    });
+  }
+
+  // ❌ Fast hash (SHA256, MD5) - crackable with GPUs
+  async hashPassword(password: string) {
+    return createHash('sha256').update(password).digest('hex');
+  }
+
+  // ❌ Manual salt - still vulnerable to GPU cracking
+  async hashWithSalt(password: string) {
+    const salt = randomBytes(16).toString('hex');
+    const hash = createHash('sha512')
+      .update(password + salt)
+      .digest('hex');
+    return `${salt}:${hash}`;
+  }
+
+  // ❌ Timing-sensitive string comparison
+  async verifyPassword(password: string, hash: string) {
+    const [salt, originalHash] = hash.split(':');
+    const computedHash = createHash('sha512')
+      .update(password + salt)
+      .digest('hex');
+    return computedHash === originalHash;  // ❌ Timing attack vulnerable
+  }
+
+  // ❌ Weak password requirements
+  @MinLength(6)  // ❌ Too short!
+  password: string;
+}
+```
+
+**Correct:**
+
+```typescript
+// ✅ Recommended for new applications
+async hash(password: string) {
+  return Bun.password.hash(password);  // Uses argon2id by default
+}
+
+// Or explicitly
+async hash(password: string) {
+  return Bun.password.hash(password, {
+    algorithm: 'argon2id',
+    memoryCost: 16,  // MB of memory (higher = more GPU-resistant)
+    timeCost: 2,     // Number of iterations
+  });
+}
+```
 
 Bun's password hashing supports both algorithms at runtime. The algorithm choice is stored in the hash prefix, so `verify()` auto-detects which algorithm was used.
 
@@ -1169,10 +1536,6 @@ Bun stores the algorithm in the hash prefix, enabling seamless migration:
 
 **Impact: CRITICAL (Enforces authentication/authorization per route)**
 
-Unprotected routes expose sensitive data. Guards run before controllers and can short-circuit requests. **Protect endpoints explicitly.**
-
-> **Hint**: Guards determine whether a request will be handled by the controller or not. Use them for authentication (who are you?) and authorization (what can you do?). Always use global guards with public route decorators for default-deny security.
-
 When implementing or reviewing security, **always** follow these steps:
 
 **Files to create/modify:**
@@ -1205,6 +1568,52 @@ export class AppModule {}
 **File:** `src/app.module.ts`
 
 **Pattern to check:**
+
+```bash
+bun add @nestjs/jwt @nestjs/passport passport passport-jwt
+bun add -D @types/passport-jwt
+```
+
+Use this checklist when reviewing or creating endpoints:
+
+- [ ] Global authentication guard registered in `app.module.ts`
+
+- [ ] `@Public()` decorator exists for public routes
+
+- [ ] Controllers don't use `any` type for `@Req()` user
+
+- [ ] Admin routes have `@Roles('admin')` guard
+
+- [ ] Resource owner checks implemented (users can only access their own data)
+
+- [ ] Rate limiting applied to auth endpoints
+
+- [ ] Guards use `Reflector` to check metadata
+
+**Incorrect:**
+
+```typescript
+// users.controller.ts - All routes exposed 🚨
+@Controller('users')
+export class UsersController {
+  @Get()
+  findAll() {
+    return this.usersService.findAll();  // 🚨 Publicly accessible!
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);  // 🚨 Anyone can view any user!
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(id);  // 🚨 Anyone can delete users!
+  }
+}
+```
+
+**Correct:**
 
 ```typescript
 // First install: bun add @nestjs/throttler
@@ -1240,22 +1649,6 @@ export class AuthController {
   }
 }
 ```
-
-Use this checklist when reviewing or creating endpoints:
-
-- [ ] Global authentication guard registered in `app.module.ts`
-
-- [ ] `@Public()` decorator exists for public routes
-
-- [ ] Controllers don't use `any` type for `@Req()` user
-
-- [ ] Admin routes have `@Roles('admin')` guard
-
-- [ ] Resource owner checks implemented (users can only access their own data)
-
-- [ ] Rate limiting applied to auth endpoints
-
-- [ ] Guards use `Reflector` to check metadata
 
 | Practice | Description |
 
@@ -1349,10 +1742,6 @@ export class UsersController {
 
 **Impact: HIGH (10-100x faster than offset for large datasets)**
 
-Offset-based pagination (`OFFSET` + `LIMIT`) becomes slow as the offset grows because the database must scan and discard all previous rows. Cursor-based pagination uses indexed columns to jump directly to the correct position, providing consistent performance regardless of page depth.
-
-> **Hint**: Use cursor pagination for infinite scroll, real-time feeds, and large datasets. Keep offset pagination only for small datasets with direct page jumping.
-
 When implementing or reviewing pagination, **always** follow these steps:
 
 **Pattern to check:** Look for `skip`/`take` or `offset`/`limit` parameters.
@@ -1380,6 +1769,106 @@ Use this checklist when reviewing or creating paginated endpoints:
 - [ ] Handles edge cases (first page, last page, empty results)
 
 - [ ] Cursor is safely encoded/decoded (base64url recommended)
+
+**Incorrect:**
+
+```typescript
+// dto/get-users.dto.ts - Offset pagination 🚨
+export class GetUsersDto {
+  @IsInt()
+  @Min(1)
+  page: number = 1;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit: number = 20;
+}
+
+// users.controller.ts - Offset based 🚨
+@Controller('users')
+export class UsersController {
+  @Get()
+  async findAll(@Query() dto: GetUsersDto) {
+    return this.usersService.findAll(dto);
+  }
+}
+
+// users.service.ts - OFFSET scans all rows 🚨
+@Injectable()
+export class UsersService {
+  async findAll(dto: GetUsersDto) {
+    const { page, limit } = dto;
+    const skip = (page - 1) * limit;
+
+    // Page 1000: scans 19,980 rows just to return 20!
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        skip,  // ❌ Scans and discards rows
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count(),
+    ]);
+
+    return {
+      data: users,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+}
+
+/* Performance issues:
+ * Page 1:    ~1ms    (scans 0 rows)
+ * Page 10:   ~5ms    (scans 180 rows)
+ * Page 100:  ~50ms   (scans 1,980 rows)
+ * Page 1000: ~500ms  (scans 19,980 rows)
+ * Page 10000: ~5000ms (scans 199,980 rows)
+ */
+```
+
+**Correct:**
+
+```tsx
+// components/UserInfiniteScroll.tsx
+import { useEffect, useRef } from 'react';
+import { useUsers } from '../hooks/useUsers';
+
+export function UserInfiniteScroll() {
+  const { users, hasNextPage, loadNext } = useUsers();
+  const observerRef = useRef<IntersectionObserver>();
+
+  const lastUserRef = (node: HTMLLIElement) => {
+    if (observerRef.current) observerRef.current.disconnect();
+
+    observerRef.current = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasNextPage) {
+        loadNext();
+      }
+    });
+
+    if (node) observerRef.current.observe(node);
+  };
+
+  return (
+    <ul>
+      {users.map((user, index) => (
+        <li
+          key={user.id}
+          ref={index === users.length - 1 ? lastUserRef : undefined}
+        >
+          {user.name}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
 
 | Aspect | Offset Pagination | Cursor Pagination |
 
@@ -1438,6 +1927,39 @@ Use this checklist when reviewing or creating paginated endpoints:
 **Impact: CRITICAL (Prevents credential leaks in source control)**
 
 Hardcoded credentials in source code get committed to git and exposed publicly. The `@nestjs/config` package provides a secure way to manage configuration through environment variables. **Secrets belong in environment only.**
+
+**Incorrect:**
+
+```typescript
+// database.module.ts
+TypeOrmModule.forRoot({
+  url: 'postgres://user:password@localhost/db',  // 🚨 Exposed!
+  ssl: {
+    cert: process.env.DB_CERT,  // Still vulnerable if cert is committed
+  },
+})
+
+// auth.service.ts
+@Injectable()
+export class AuthService {
+  private readonly jwtSecret = 'my-super-secret-key-12345';  // 🚨 Exposed!
+  private readonly apiKey = 'sk_test_abc123xyz';  // 🚨 Exposed!
+}
+
+// payment.controller.ts
+const stripe = require('stripe')('sk_test_51ABC...');  // 🚨 Exposed!
+```
+
+**Correct:**
+
+```typescript
+// For production, ignore .env files and use process.env only
+ConfigModule.forRoot({
+  isGlobal: true,
+  ignoreEnvFile: process.env.NODE_ENV === 'production',
+  validationSchema: productionValidationSchema,
+})
+```
 
 Use Joi or Zod to validate environment variables at startup:
 
@@ -1647,13 +2169,29 @@ async function bootstrap() {
 
 All modules load at startup, wasting memory on unused features. Lazy loading defers module initialization until the first request to that module. **Load only what's needed, when it's needed.**
 
-> **Hint**: Use lazy loading for administrative panels, analytics dashboards, reporting features, and any route that isn't accessed immediately on application startup. Core features like auth and public APIs should remain eagerly loaded.
+**Incorrect:**
 
-Without lazy loading:
+```typescript
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { UsersModule } from './users/users.module';
+import { AdminModule } from './admin/admin.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { ReportsModule } from './reports/reports.module';
 
-With lazy loading:
+@Module({
+  imports: [
+    CoreModule,
+    UsersModule,
+    AdminModule,      // 🚨 Always loads at startup
+    AnalyticsModule,  // 🚨 Always loads at startup
+    ReportsModule,    // 🚨 Always loads at startup
+  ],
+})
+export class AppModule {}
+```
 
-**Problems:**
+**Correct:**
 
 ```bash
 # Application startup
@@ -1671,16 +2209,6 @@ Memory usage: 150MB (+50MB)
 [AnalyticsModule] loaded
 Memory usage: 230MB (+80MB)
 ```
-
-- Increased startup time (all modules initialize immediately)
-
-- Higher memory usage (all providers and services loaded)
-
-- Slower cold starts (affects serverless deployments)
-
-- Unused code stays in memory
-
-NestJS supports lazy loading through the `@LazyModuleDecorator` and dynamic imports:
 
 For NestJS 10+, use the built-in `ModuleLoader`:
 
@@ -1746,15 +2274,78 @@ Configure which modules to lazy load:
 
 Scheduled tasks like cleanup jobs, data synchronization, and periodic reports need reliable execution. The `@nestjs/schedule` module provides decorators for cron jobs, intervals, and timeouts with proper NestJS lifecycle management. **Never use raw `setInterval` or external cron schedulers.**
 
-> **Hint**: Use `@Cron()` for recurring tasks (daily backups, hourly cleanup), `@Interval()` for fixed-frequency tasks (every 5 minutes), and `@Timeout()` for one-time delayed execution. Always handle errors to prevent repeated failures.
+**Incorrect:**
 
-When implementing or reviewing scheduled tasks, **always** follow these steps:
+```typescript
+// cleanup.service.ts - Raw timers 🚨
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 
-**Pattern to check:** Look for `setInterval`, `setTimeout`, or external schedulers like `node-cron`.
+@Injectable()
+export class CleanupService implements OnModuleDestroy {
+  private intervals: NodeJS.Timeout[] = [];
 
-**If found:** Replace with `@nestjs/schedule` decorators.
+  constructor() {
+    // ❌ Raw interval - no NestJS lifecycle
+    const interval1 = setInterval(() => {
+      this.cleanupExpiredSessions().catch(console.error);
+    }, 60000);  // Every minute
 
-**Run in terminal:**
+    // ❌ Another raw interval
+    const interval2 = setInterval(() => {
+      this.deleteOldLogs().catch(console.error);
+    }, 3600000);  // Every hour
+
+    // ❌ Manual interval tracking
+    this.intervals.push(interval1, interval2);
+  }
+
+  // ❌ Manual cleanup required
+  onModuleDestroy() {
+    this.intervals.forEach(clearInterval);
+  }
+
+  // ❌ No error handling in callbacks
+  async cleanupExpiredSessions() {
+    await this.prisma.session.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
+  }
+
+  async deleteOldLogs() {
+    await this.prisma.log.deleteMany({
+      where: { createdAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+    });
+  }
+}
+
+// subscription.service.ts - Manual tracking 🚨
+@Injectable()
+export class SubscriptionService {
+  private checkInterval: NodeJS.Timeout;
+
+  constructor(private prisma: PrismaService) {
+    // ❌ Manually start interval
+    this.startCheckingExpiringSubscriptions();
+  }
+
+  private startCheckingExpiringSubscriptions() {
+    this.checkInterval = setInterval(async () => {
+      try {
+        await this.checkExpiringSubscriptions();
+      } catch (error) {
+        console.error('Subscription check failed:', error);
+        // ❌ No structured logging
+      }
+    }, 24 * 60 * 60 * 1000);  // Daily
+  }
+
+  private async checkExpiringSubscriptions() {
+    // Business logic
+  }
+}
+```
+
+**Correct:**
 
 ```typescript
 // tasks/scheduled-tasks.service.spec.ts ✅
@@ -1816,26 +2407,6 @@ describe('ScheduledTasksService', () => {
   });
 });
 ```
-
-**File:** `src/app.module.ts`
-
-**File:** `src/tasks/scheduled-tasks.service.ts`
-
-Use this checklist when reviewing or creating scheduled tasks:
-
-- [ ] No raw `setInterval` or `setTimeout` used
-
-- [ ] ScheduleModule is imported in `app.module.ts`
-
-- [ ] Scheduled tasks use `@Cron()`, `@Interval()`, or `@Timeout()`
-
-- [ ] All scheduled methods have error handling (try/catch)
-
-- [ ] Long-running tasks have overlap prevention
-
-- [ ] Cron expressions use `CronExpression` enum when possible
-
-- [ ] Tasks log start/completion for monitoring
 
 | Practice | Why |
 
